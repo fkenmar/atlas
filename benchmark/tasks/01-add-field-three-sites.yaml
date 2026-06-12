@@ -1,0 +1,51 @@
+# Agent benchmark task. Schema (see benchmark/README.md):
+#   id:       unique slug, matches the filename
+#   title:    one line
+#   prompt:   the verbatim task given to the agent
+#   repo:     pinned target repository (url + rev; comparisons across revs are invalid)
+#   success:  objective pass criterion + what counts as failure
+#   notes:    scoring guidance / pitfalls
+id: 01-add-field-three-sites
+title: Add a field to an existing dataclass threaded through three call sites
+prompt: >
+  Add an optional `description: str | None = None` field to the frozen Mark
+  dataclass in src/_pytest/mark/structures.py, and thread it through so it is
+  (1) preserved by Mark.combined_with, (2) settable via MarkDecorator.with_args,
+  and (3) included in Mark's repr. Keep the existing test suite for marks
+  passing.
+repo:
+  url: https://github.com/pytest-dev/pytest
+  rev: 8.2.0
+success:
+  check: >
+    The Mark dataclass has the new field with the correct default;
+    Mark.combined_with and MarkDecorator.with_args both propagate it;
+    `python -m pytest testing/test_mark.py` passes at the pinned rev.
+  # Machine-checkable form, run by run.sh inside the task's working clone
+  # (AST-based so it needs only stock python3, no installed pytest).
+  cmd: |
+    python3 - <<'PYEOF'
+    import ast, sys
+    src = open("src/_pytest/mark/structures.py").read()
+    tree = ast.parse(src)
+    marks = [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "Mark"]
+    has_field = any(
+        isinstance(b, ast.AnnAssign) and getattr(b.target, "id", "") == "description"
+        for m in marks for b in m.body
+    )
+    def fn_mentions(name):
+        fns = [n for n in ast.walk(tree)
+               if isinstance(n, ast.FunctionDef) and n.name == name]
+        return any("description" in (ast.get_source_segment(src, f) or "") for f in fns)
+    ok = bool(marks) and has_field and fn_mentions("combined_with") and fn_mentions("with_args")
+    sys.exit(0 if ok else 1)
+    PYEOF
+  anti_pattern: >
+    Agent creates a parallel Mark-like class, patches call sites it never
+    located (missing one of the three), or breaks frozen-dataclass semantics
+    by mutating instead of replacing.
+notes: >
+  Knowledge-sensitive: without a map, agents typically burn turns locating
+  Mark and discovering that combined_with/with_args are the propagation
+  points. Exploration tokens = tokens spent reading/searching before the
+  first correct edit to structures.py.

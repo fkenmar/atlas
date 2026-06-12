@@ -1,0 +1,39 @@
+# Agent benchmark task. Schema (see benchmark/README.md):
+#   id:       unique slug, matches the filename
+#   title:    one line
+#   prompt:   the verbatim task given to the agent
+#   repo:     pinned target repository (url + rev; comparisons across revs are invalid)
+#   success:  objective pass criterion + what counts as failure
+#   notes:    scoring guidance / pitfalls
+id: 02-reuse-existing-utility
+title: Find and call an existing utility instead of reimplementing it
+prompt: >
+  In src/_pytest/config/__init__.py, normalize the user-supplied paths that
+  arrive as strings so they are absolute before comparison. Use whatever
+  path-normalization helper this codebase already provides rather than
+  writing new os.path/pathlib logic inline.
+repo:
+  url: https://github.com/pytest-dev/pytest
+  rev: 8.2.0
+success:
+  check: >
+    The change calls the existing helper `absolutepath` from
+    src/_pytest/pathlib.py (imported, not copied); no new inline
+    os.path.abspath/Path.resolve reimplementation is introduced;
+    `python -m pytest testing/test_pathlib.py` passes at the pinned rev.
+  # Machine-checkable form, run by run.sh inside the task's working clone:
+  # the diff must ADD a use of the existing helper and must NOT add an
+  # inline reimplementation.
+  cmd: |
+    added="$(git diff -U0 -- src/_pytest/config/__init__.py | grep -E '^\+' || true)"
+    printf '%s' "$added" | grep -q 'absolutepath' &&
+      ! printf '%s' "$added" | grep -Eq 'os\.path\.abspath|\.resolve\('
+  anti_pattern: >
+    Agent reimplements normalization inline (os.path.abspath, Path.resolve,
+    or a new helper function) without discovering _pytest/pathlib.py —
+    the exact failure mode repomap exists to prevent.
+notes: >
+  This task directly tests the product thesis from PRD §2.1: "an agent that
+  doesn't know AuthService.refresh_token() exists will reimplement it."
+  Score reuse-vs-reimplement from the final diff; exploration tokens measured
+  up to the first edit that imports the helper.

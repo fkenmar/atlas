@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: fmt
+        run: cargo fmt --all -- --check
+
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: test
+        run: cargo test
+
+      - name: release build
+        run: cargo build --release
+
+      # Self-map smoke test: runs the built binary on this repo. Gated on the
+      # binary actually supporting --budget, so CI passes pre-M1 (the skeleton
+      # binary panics with todo!) and the gate opens automatically once the
+      # M1 CLI lands.
+      - name: self-map smoke test (auto-enables once M1 lands)
+        run: |
+          bin=target/release/repomap
+          if "$bin" --help 2>/dev/null | grep -q -- '--budget'; then
+            echo "binary supports --budget; running self-map"
+            "$bin" . --budget 1024 > /dev/null
+            echo "self-map OK"
+          else
+            echo "skipping: --budget not supported yet (pre-M1 skeleton)"
+          fi

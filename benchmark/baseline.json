@@ -1,0 +1,32 @@
+{
+  "_schema": {
+    "what": "Recorded no-map baseline for the agent-task benchmark. Every /bench run is compared against this file.",
+    "how_it_changes": "Regenerated ONLY by './benchmark/run.sh --record-baseline' (lands with the M0 integration point). Hand edits are blocked by a PreToolUse hook: a baseline you can casually edit is not a baseline.",
+    "schema_version": "integer; bumped when this file's shape changes",
+    "recorded_at": "ISO-8601 timestamp of the recording run; null until the M0 baseline is recorded",
+    "environment": "machine, model, and repomap rev used for the recording run; null until recorded",
+    "runs_per_arm": "repetitions per task arm in the recording run (protocol minimum: 3; medians reported)",
+    "tasks[].task": "task id, matching tasks/<id>.yaml",
+    "tasks[].exploration_tokens": "median tokens spent reading/searching before the first correct edit, without a map",
+    "tasks[].turns": "median turns-to-completion without a map",
+    "tasks[].variance_note": "free-text note when the runs diverged materially (>15% spread), else null"
+  },
+  "schema_version": 1,
+  "recorded_at": "20260612-091604",
+  "environment": "Darwin arm64, claude 2.1.175 (Claude Code), model claude-sonnet-4-6, max_turns 30",
+  "runs_per_arm": 3,
+  "tasks": [
+    {
+      "task": "01-add-field-three-sites",
+      "exploration_tokens": 902555,
+      "turns": 22,
+      "variance_note": null
+    },
+    {
+      "task": "02-reuse-existing-utility",
+      "exploration_tokens": 369461,
+      "turns": 14,
+      "variance_note": null
+    }
+  ]
+}

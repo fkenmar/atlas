@@ -1,0 +1,14 @@
+[package]
+name = "repomap"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.96"
+description = "Compile a codebase into a token-budgeted structural map for LLM coding agents"
+license = "MIT"
+
+# Dependencies land milestone by milestone (docs/PRD.md §7.2): tree-sitter +
+# grammar crates (M0), clap/rayon/tiktoken-rs/bincode (M1), notify/git2 (M2).
+# Every addition is approved by the maintainer first — see CLAUDE.md.
+[dependencies]
+tree-sitter = "0.26.9"
+tree-sitter-python = "0.25.0"

@@ -1,0 +1,15 @@
+# extraction snapshot for queries/python/tags.scm
+# regenerate: UPDATE_SNAPSHOTS=1 cargo test query_  (review the diff!)
+L6   Constant  Public  API_VERSION     :: API_VERSION = "1.0"
+L9   Function  Public  top_level       :: def top_level(x: int) -> int:
+L13  Function  Public  fetch           :: async def fetch(url: str) -> Optional[str]:
+L17  Function  Public  helper          :: def helper(x: int) -> int:
+L21  Class     Public  Service         :: class Service:
+L25  Method    Public  name            :: def name(self) -> str:
+L28  Method    Public  run             :: def run(self) -> None:
+L32  Method    Public  helper_method   :: def helper_method() -> None:
+L36  Function  Public  decorating      :: def decorating(fn):
+L41  Function  Public  decorated       :: def decorated() -> None:
+L46  Class     Public  DecoratedService :: class DecoratedService:
+imports: os, typing
+references: get, helper, helper_method
