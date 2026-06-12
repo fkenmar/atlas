@@ -30,6 +30,13 @@ benchmark delta.
   from per-turn cache re-reads of the oversized map — direct evidence that
   M1 budgeting is the load-bearing feature. Details in STATUS.md.
 
+- Self-improvement loop: docs/SELF_IMPROVEMENT.md (pick → implement → gate →
+  measure → keep-or-revert by stats), runnable as `/improve` (one iteration)
+  or `/loop /improve` (continuous, self-paced); benchmark/history.md is the
+  append-only stats ledger, seeded with the baseline and probe rows.
+- Competitive-arms protocol (post-M1) in benchmark/README.md: repomap must
+  beat Aider repo-map, ctags, and a file-tree control at equal budget.
+
 ### Changed
 - run.sh delivers prompts via stdin (naive maps exceed ARG_MAX as an
   argument) and keeps harness artifacts outside the working clone.

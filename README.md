@@ -42,6 +42,7 @@ cargo build && cargo test
 
 - Conventions, workflow rules, and the scope contract: [CLAUDE.md](CLAUDE.md)
 - Architecture decisions: [docs/adr/](docs/adr/)
+- Development runs as a measured loop, not ad-hoc prompting: [docs/SELF_IMPROVEMENT.md](docs/SELF_IMPROVEMENT.md) — `/improve` per iteration, keep-or-revert decided by benchmark stats, every measured change appended to [benchmark/history.md](benchmark/history.md)
 - Distribution (M2): single static binaries via cargo-dist — Homebrew, `cargo install repomap`, curl-pipe installer
 
 MIT © Kenmar

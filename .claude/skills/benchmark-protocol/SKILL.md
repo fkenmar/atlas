@@ -37,3 +37,7 @@ Good tasks are (1) realistic agent asks, (2) objectively checkable, and (3) sens
 ## The rule
 
 A ranking or budgeting PR without a benchmark delta is not done (CLAUDE.md). Run `/bench`, report the per-task table and the aggregate vs. the ≥25% target, and put the delta in the PR/commit description.
+
+## The ledger
+
+Every measured change appends one row to `benchmark/history.md` (medians, pass rate, Δ vs the previous comparable row), committed alongside the change — the self-improvement loop (docs/SELF_IMPROVEMENT.md) does this in its record step. "Comparable" means same arm, model, repo rev, task set, and metric version; anything else starts a new comparison chain, noted in the row.

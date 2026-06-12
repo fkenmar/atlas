@@ -13,3 +13,11 @@ Format: `- **idea** — why it's parked (date)`
 ## Parked
 
 *(empty — the parking lot opens with the repo)*
+
+## Tried and reverted
+
+The self-improvement loop (docs/SELF_IMPROVEMENT.md) appends reverted
+approaches here with their numbers, so no future iteration retries them
+blind. Format: `- **approach** — why it regressed, with stats (date)`
+
+*(empty)*

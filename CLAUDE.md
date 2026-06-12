@@ -45,6 +45,7 @@ Hard non-goals (PRD §3.2). If asked for one, decline plainly, park it in ideas.
 ## Where things are
 
 - STATUS.md — current milestone, exit criteria, NOW/NEXT/NOT-YET board. Surfaced by the SessionStart hook.
-- benchmark/README.md — the benchmark protocol.
+- benchmark/README.md — the benchmark protocol; benchmark/history.md — append-only stats ledger of every measured change.
+- docs/SELF_IMPROVEMENT.md — the autonomous improvement loop: `/improve` for one measured iteration, `/loop /improve` for continuous; keep-or-revert is decided by stats, never vibes.
 - docs/adr/ — past decisions; read before redesigning anything.
 - docs/PRD.md — requirements, milestones, risks, open questions.
