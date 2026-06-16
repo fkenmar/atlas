@@ -9,6 +9,17 @@ benchmark delta.
 ## [Unreleased]
 
 ### Added
+- M1 link stage (ADR-0002): best-effort syntactic import/reference graph —
+  File nodes (index-aligned to the file list) plus Symbol nodes, with import
+  edges (File→File) and reference edges (File→callee Symbol), sorted and
+  deduplicated for determinism. Per-language import resolution (Python dotted,
+  TypeScript relative, Rust `use` incl. `pub use`/aliases), all fuzzy by
+  design (no type checker). A rust-reviewer pass caught and fixed four
+  false-edge classes before commit: Python bare-name shadowing, Rust `pub use`
+  mis-parsing, TypeScript `../` root-escape, and Rust deep-segment basename
+  guessing — each now has a regression test (17 link tests total). Feeds
+  PageRank; the benchmark runs at the M1 integration checkpoint (no budgeted
+  map to inject until budgeting lands).
 - M1 grammars (FR-1): TypeScript/JavaScript (tree-sitter-typescript 0.23.2)
   and Rust (tree-sitter-rust 0.24.2) wired end-to-end — per-language
   `grammar()` handle + compiled tags.scm query, with extraction snapshot tests

@@ -15,8 +15,8 @@ Next milestone: **M1 — Core (v0.1 alpha)**: TS/JS + Rust grammars; import link
 |---|---|---|
 | ~~TS/JS grammar (tree-sitter-typescript)~~ ✅ done 2026-06-16 | Incremental cache + warm path (M1) | MCP server (M2) |
 | ~~Rust grammar (tree-sitter-rust)~~ ✅ done 2026-06-16 | rayon parallel parse (M1) | --watch daemon (M2) |
-| Import linking → index-based graph (ADR 0002) (M1) ← next | clap CLI: --budget/--format/--focus (M1; opens the CI self-map gate) | --focus personalization (M2) |
-| PageRank over the graph (M1) | .gitignore/.repomapignore in discover (FR-7, M1) | cargo-dist packaging (M2) |
+| ~~Import linking → index-based graph (ADR 0002)~~ ✅ done 2026-06-16 | clap CLI: --budget/--format/--focus (M1; opens the CI self-map gate) | --focus personalization (M2) |
+| PageRank over the graph (M1) ← next | .gitignore/.repomapignore in discover (FR-7, M1) | cargo-dist packaging (M2) |
 | tiktoken budgeting + degradation ladder (M1) | Refine exploration-token metric toward PRD definition (tokens before first correct edit) | Tier 2 grammars, XML renderer, repomap diff (M3) |
 | | Re-record baseline when with-map arm goes live (variance notes now auto-recorded by run.sh) | More benchmark tasks (target: 10) + decide long-term target repo (pytest 8.2.0 is the M0 stand-in) |
 | | Competitive benchmark arms (post-M1): same suite vs Aider repo-map / ctags / file-tree control at equal budget — repomap must beat them all, Aider especially (protocol: benchmark/README.md §Competitive arms) | |
