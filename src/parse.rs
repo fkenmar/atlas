@@ -138,6 +138,12 @@ pub fn parse_file(file: &SourceFile) -> Option<ParsedFile> {
     let lines: Vec<&str> = source.lines().collect();
     let capture_names = query.capture_names();
 
+    // Rust test scaffolding (functions/helpers/the `mod tests` symbol itself)
+    // is noise in the structural map and crowds out the real API surface.
+    // Collect the row ranges of every `#[cfg(test)]` / `tests`-named module so
+    // their declarations can be dropped. Empty for non-Rust.
+    let test_ranges = test_module_ranges(file.lang, &tree, source.as_bytes());
+
     // Keyed by (line of name, name) so duplicate pattern matches collapse;
     // BTreeMap keeps the deterministic (line, name) order for free.
     let mut symbols: BTreeMap<(usize, String), Symbol> = BTreeMap::new();
@@ -152,6 +158,11 @@ pub fn parse_file(file: &SourceFile) -> Option<ParsedFile> {
         let mut definition: Option<SymbolKind> = None;
         let mut reference: Option<&str> = None;
         let mut outer_text: Option<&str> = None;
+        // Row of the outer (definition/reference) node, used to suppress
+        // imports/calls that originate inside a test module — the `@name`
+        // row alone is the right anchor for symbols and bare calls, but the
+        // outer node anchors whole-node captures like Rust `use` items.
+        let mut outer_row: usize = 0;
 
         for capture in m.captures {
             let capture_name = capture_names[capture.index as usize];
@@ -162,10 +173,21 @@ pub fn parse_file(file: &SourceFile) -> Option<ParsedFile> {
             } else if let Some(kind) = capture_name.strip_prefix("definition.") {
                 definition = SymbolKind::from_capture(kind);
                 outer_text = Some(text);
+                outer_row = capture.node.start_position().row;
             } else if let Some(kind) = capture_name.strip_prefix("reference.") {
                 reference = Some(kind);
                 outer_text = Some(text);
+                outer_row = capture.node.start_position().row;
             }
+        }
+
+        // Suppress anything originating inside a Rust test module — the test
+        // fns, helpers, the `mod tests` symbol itself, and the spurious import
+        // and call edges that test scaffolding would otherwise add to the
+        // graph. Empty `test_ranges` (non-Rust) makes this a no-op.
+        let in_test = |row: usize| test_ranges.iter().any(|r| r.contains(&row));
+        if in_test(name_row) || in_test(outer_row) {
+            continue;
         }
 
         match (definition, reference) {
@@ -226,6 +248,70 @@ pub fn parse_file(file: &SourceFile) -> Option<ParsedFile> {
     })
 }
 
+/// Inclusive row range (0-based) of a declaration we want to suppress.
+type RowRange = std::ops::RangeInclusive<usize>;
+
+/// Row ranges of Rust test modules: any `mod_item` named `tests` OR preceded
+/// by a `#[cfg(test)]` attribute. Every symbol whose declaration row falls in
+/// one of these ranges is dropped (the test fns, helpers, and the module
+/// symbol itself). Returns empty for any non-Rust language — Python/TS test
+/// files are separate files that PageRank already sinks, so detecting test
+/// constructs inside them is out of scope here.
+fn test_module_ranges(lang: Language, tree: &tree_sitter::Tree, source: &[u8]) -> Vec<RowRange> {
+    let mut ranges: Vec<RowRange> = Vec::new();
+    if lang != Language::Rust {
+        return ranges;
+    }
+    // `mod_item`s can nest, but a test module at any depth taints everything
+    // inside; walk the whole tree and collect each qualifying module's span.
+    collect_test_modules(tree.root_node(), source, &mut ranges);
+    ranges
+}
+
+/// Recurse the named tree, pushing the inclusive row span of every `mod_item`
+/// that qualifies as a test module.
+fn collect_test_modules(node: tree_sitter::Node, source: &[u8], ranges: &mut Vec<RowRange>) {
+    let mut cursor = node.walk();
+    let children: Vec<tree_sitter::Node> = node.named_children(&mut cursor).collect();
+    for child in children {
+        if child.kind() == "mod_item" && is_test_module(child, source) {
+            ranges.push(child.start_position().row..=child.end_position().row);
+            // No need to descend: the whole span is already suppressed.
+            continue;
+        }
+        collect_test_modules(child, source, ranges);
+    }
+}
+
+/// A `mod_item` is a test module when it is named `tests` or is preceded by a
+/// `#[cfg(test)]` attribute. Walks back over intervening attribute/comment
+/// siblings so `#[cfg(test)]\n#[allow(..)]\nmod foo` is still detected.
+fn is_test_module(module: tree_sitter::Node, source: &[u8]) -> bool {
+    if let Some(name) = module.child_by_field_name("name") {
+        if name.utf8_text(source) == Ok("tests") {
+            return true;
+        }
+    }
+    let mut prev = module.prev_sibling();
+    while let Some(node) = prev {
+        match node.kind() {
+            "attribute_item" => {
+                let text = node.utf8_text(source).unwrap_or("");
+                // Normalize whitespace so `cfg ( test )` and `cfg(test)` match.
+                let compact: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+                if compact.contains("cfg(test)") {
+                    return true;
+                }
+            }
+            "line_comment" | "block_comment" => {}
+            // Any other preceding node ends the attribute run.
+            _ => break,
+        }
+        prev = node.prev_sibling();
+    }
+    false
+}
+
 /// UPPER_SNAKE check for the module-level-assignment constant rule.
 fn is_const_name(name: &str) -> bool {
     !name.is_empty()
@@ -265,18 +351,74 @@ fn build_query(lang: Language) -> Option<Query> {
 
 #[cfg(test)]
 mod tests {
-    use super::is_const_name;
+    use super::{test_module_ranges, Language};
 
     #[test]
     fn const_name_convention() {
-        assert!(is_const_name("API_VERSION"));
-        assert!(is_const_name("X2"));
-        assert!(!is_const_name("ApiVersion"));
-        assert!(!is_const_name("api_version"));
-        assert!(!is_const_name("_private"));
-        assert!(!is_const_name(""));
+        assert!(super::is_const_name("API_VERSION"));
+        assert!(super::is_const_name("X2"));
+        assert!(!super::is_const_name("ApiVersion"));
+        assert!(!super::is_const_name("api_version"));
+        assert!(!super::is_const_name("_private"));
+        assert!(!super::is_const_name(""));
     }
 
-    // Full extraction is covered by the snapshot test in
-    // tests/query_snapshots.rs against tests/queries/fixtures/python.py.
+    fn ranges(source: &str) -> Vec<(usize, usize)> {
+        let grammar = Language::Rust.grammar().expect("rust grammar wired");
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&grammar).expect("set rust language");
+        let tree = parser.parse(source, None).expect("parse");
+        test_module_ranges(Language::Rust, &tree, source.as_bytes())
+            .into_iter()
+            .map(|r| (*r.start(), *r.end()))
+            .collect()
+    }
+
+    #[test]
+    fn detects_tests_named_module() {
+        // `mod tests` qualifies on name alone, no attribute needed.
+        let r = ranges("mod tests {\n    fn h() {}\n}\n");
+        assert_eq!(r, vec![(0, 2)]);
+    }
+
+    #[test]
+    fn detects_cfg_test_on_differently_named_module() {
+        // A non-`tests` name still qualifies via the preceding attribute.
+        let r = ranges("#[cfg(test)]\nmod unit_checks {\n    fn h() {}\n}\n");
+        assert_eq!(r, vec![(1, 3)]);
+    }
+
+    #[test]
+    fn cfg_test_through_intervening_attribute() {
+        let src = "#[cfg(test)]\n#[allow(dead_code)]\nmod m {\n    fn h() {}\n}\n";
+        assert_eq!(ranges(src), vec![(2, 4)]);
+    }
+
+    #[test]
+    fn ordinary_module_is_not_a_test_module() {
+        assert!(ranges("pub mod nested {\n    pub type A = u64;\n}\n").is_empty());
+    }
+
+    #[test]
+    fn cfg_test_on_non_module_is_ignored() {
+        // The task scopes suppression to test *modules*; a `#[cfg(test)]` on a
+        // bare fn produces no range (documented edge case).
+        assert!(ranges("#[cfg(test)]\nfn lonely() {}\n").is_empty());
+    }
+
+    #[test]
+    fn non_rust_is_a_noop() {
+        // Python source parsed as Rust would be malformed, but the language
+        // guard short-circuits before parsing matters.
+        let src = "mod tests { fn h() {} }";
+        let grammar = Language::Rust.grammar().expect("rust grammar");
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&grammar).expect("set language");
+        let tree = parser.parse(src, None).expect("parse");
+        assert!(test_module_ranges(Language::Python, &tree, src.as_bytes()).is_empty());
+        assert!(test_module_ranges(Language::TypeScript, &tree, src.as_bytes()).is_empty());
+    }
+
+    // Full extraction (including end-to-end test-module exclusion) is covered
+    // by the snapshot test in tests/query_snapshots.rs against the fixtures.
 }

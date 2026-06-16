@@ -8,6 +8,16 @@ benchmark delta.
 
 ## [Unreleased]
 
+### Changed
+- Extraction now drops Rust inline test scaffolding: symbols (and their
+  spurious import/call graph edges) inside `#[cfg(test)]` / `mod tests`
+  modules are suppressed via tree-sitter node navigation — test fns, helpers,
+  and the `mod tests` symbol itself are no longer mapped. They are noise, not
+  API surface. Dogfood impact on repomap's own source: the map went from a
+  degraded 2,036-token "params elided" listing with 6 of 16 files collapsed to
+  a **1,749-token full-detail listing of all 16 files** — removing test noise
+  freed enough budget to show the entire real API at full signature fidelity.
+
 ### Added
 - M1 CLI integration: clap (derive) drives the full pipeline end-to-end —
   `repomap [PATH] --budget N --focus PATH... --lang csv --no-private`. discover

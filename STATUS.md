@@ -19,8 +19,8 @@ Next milestone: **M1 — Core (v0.1 alpha)**: TS/JS + Rust grammars; import link
 | ~~PageRank over the graph~~ ✅ done 2026-06-16 | .gitignore/.repomapignore in discover (FR-7, M1) | cargo-dist packaging (M2) |
 | ~~tiktoken budgeting + degradation ladder~~ ✅ code done 2026-06-16 (bench owed at integration) | Refine exploration-token metric toward PRD definition (tokens before first correct edit) | Tier 2 grammars, XML renderer, repomap diff (M3) |
 | ~~clap CLI + full pipeline wired (discover→…→render)~~ ✅ done 2026-06-16 | | |
-| Exclude/deprioritize test code in the map ← next (integration showed test scaffolding dominates the budget) | | |
-| Checkpoint benchmark (after the quality pass) | | |
+| ~~Exclude inline #[cfg(test)] code from extraction~~ ✅ done 2026-06-16 (self-map: 2036 tok degraded → 1749 tok at FULL detail, 16/16 files) | | |
+| Checkpoint benchmark (pytest with-map vs baseline) ← next | | |
 | | Re-record baseline when with-map arm goes live (variance notes now auto-recorded by run.sh) | More benchmark tasks (target: 10) + decide long-term target repo (pytest 8.2.0 is the M0 stand-in) |
 | | Competitive benchmark arms (post-M1): same suite vs Aider repo-map / ctags / file-tree control at equal budget — repomap must beat them all, Aider especially (protocol: benchmark/README.md §Competitive arms) | |
 

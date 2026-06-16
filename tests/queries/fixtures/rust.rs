@@ -56,3 +56,18 @@ macro_rules! shout {
         $x
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::top_level;
+
+    fn make_service() -> Service {
+        Service::new()
+    }
+
+    #[test]
+    fn top_level_increments() {
+        let _ = make_service();
+        assert_eq!(top_level(1), 2);
+    }
+}
