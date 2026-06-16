@@ -1,0 +1,90 @@
+# Comprehension benchmark question set — pytest 8.2.0.
+# Schema:
+#   repo:      pinned target repository (same pinning rules as tasks/)
+#   questions: one entry per question
+#     id:        unique slug
+#     question:  verbatim question given to the agent (read-only session)
+#     match:     how `expect` is scored against the agent's answer —
+#                  any: at least one expected substring present
+#                  all: every expected substring present
+#     expect:    substrings (exact identifiers / repo-relative paths),
+#                EVERY entry verified against the pinned clone before commit
+repo:
+  url: https://github.com/pytest-dev/pytest
+  rev: 8.2.0
+questions:
+  - id: mark-dataclass-location
+    question: >
+      Which file defines the frozen `Mark` dataclass used by pytest markers?
+      Give the repo-relative path.
+    match: any
+    expect:
+      - "_pytest/mark/structures.py"
+  - id: absolute-path-helper
+    question: >
+      pytest has an existing helper that converts a string into an absolute
+      Path. Name the function and the module file it lives in.
+    match: all
+    expect:
+      - "absolutepath"
+      - "pathlib"
+  - id: central-config-object
+    question: >
+      What class is pytest's central configuration object, and which module
+      defines it?
+    match: all
+    expect:
+      - "Config"
+      - "_pytest/config"
+  - id: assertion-rewrite-module
+    question: >
+      Which module implements pytest's assertion rewriting (the import hook
+      that rewrites assert statements)? Give the repo-relative path.
+    match: any
+    expect:
+      - "_pytest/assertion/rewrite"
+  - id: plugin-manager-class
+    question: >
+      What is the name of pytest's plugin manager class?
+    match: any
+    expect:
+      - "PytestPluginManager"
+  - id: fixture-core-file
+    question: >
+      Which file holds the fixture system's core implementation (e.g. the
+      FixtureManager class)? Give the repo-relative path.
+    match: any
+    expect:
+      - "_pytest/fixtures.py"
+  - id: fail-exception
+    question: >
+      Which exception class does pytest.fail() raise, and which module
+      defines it?
+    match: all
+    expect:
+      - "Failed"
+      - "outcomes"
+  - id: console-entry-point
+    question: >
+      Which function is the console-script entry point for the `pytest`
+      command, and where is it defined?
+    match: all
+    expect:
+      - "console_main"
+      - "_pytest/config"
+  - id: terminal-reporter
+    question: >
+      What class renders pytest's terminal output (the progress display and
+      the end-of-run summary), and which file defines it?
+    match: all
+    expect:
+      - "TerminalReporter"
+      - "terminal"
+  - id: import-path-helper
+    question: >
+      Name the helper pytest uses to import a Python module from a
+      filesystem path, and the file it lives in.
+    match: all
+    expect:
+      - "import_path"
+      - "pathlib"

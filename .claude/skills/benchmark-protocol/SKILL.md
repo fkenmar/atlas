@@ -38,6 +38,10 @@ Good tasks are (1) realistic agent asks, (2) objectively checkable, and (3) sens
 
 A ranking or budgeting PR without a benchmark delta is not done (CLAUDE.md). Run `/bench`, report the per-task table and the aggregate vs. the ≥25% target, and put the delta in the PR/commit description.
 
+## The comprehension gate
+
+`./benchmark/comprehension.sh` measures understanding: read-only Q&A sessions against the pinned repo, scored against verified answer keys (`comprehension/questions-*.yaml`). Hard gate: **with-map accuracy ≥ without-map accuracy** — a drop means the map misleads (faster but wronger) and the change reverts regardless of token wins. Run it whenever map content or rendering changes. Answer-key rule: never commit an expected answer you haven't verified against the pinned clone.
+
 ## The ledger
 
 Every measured change appends one row to `benchmark/history.md` (medians, pass rate, Δ vs the previous comparable row), committed alongside the change — the self-improvement loop (docs/SELF_IMPROVEMENT.md) does this in its record step. "Comparable" means same arm, model, repo rev, task set, and metric version; anything else starts a new comparison chain, noted in the row.

@@ -64,21 +64,28 @@ fn query_rust_tags_contract() {
     assert_tags_contract("rust");
 }
 
-#[test]
-fn query_python_fixture_snapshot() {
-    let fixture = "tests/queries/fixtures/python.py";
-    let snapshot_path = "tests/queries/snapshots/python.snap";
+/// Parse a committed fixture, render its extraction, and diff against the
+/// committed snapshot. `UPDATE_SNAPSHOTS=1` regenerates (review the diff like
+/// code). Covers every wired Tier 1 grammar so a query change in any language
+/// fails loudly here.
+fn assert_fixture_snapshot(stem: &str, ext: &str, lang: repomap::lang::Language) {
+    let rel = format!("{stem}.{ext}");
+    let fixture = format!("tests/queries/fixtures/{rel}");
+    let snapshot_path = format!("tests/queries/snapshots/{stem}.snap");
 
     let file = repomap::discover::SourceFile {
-        path: std::path::PathBuf::from(fixture),
-        rel: "python.py".to_string(),
-        lang: repomap::lang::Language::Python,
+        path: std::path::PathBuf::from(&fixture),
+        rel: rel.clone(),
+        lang,
     };
     let parsed = repomap::parse::parse_file(&file)
         .unwrap_or_else(|| panic!("{fixture} must parse — it is our own fixture"));
 
     let mut rendered = String::new();
-    rendered.push_str("# extraction snapshot for queries/python/tags.scm\n");
+    rendered.push_str(&format!(
+        "# extraction snapshot for queries/{}/tags.scm\n",
+        lang.name()
+    ));
     rendered.push_str("# regenerate: UPDATE_SNAPSHOTS=1 cargo test query_  (review the diff!)\n");
     for s in &parsed.symbols {
         rendered.push_str(&format!(
@@ -95,16 +102,31 @@ fn query_python_fixture_snapshot() {
 
     if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
         std::fs::create_dir_all("tests/queries/snapshots").expect("create snapshots dir");
-        std::fs::write(snapshot_path, &rendered).expect("write snapshot");
+        std::fs::write(&snapshot_path, &rendered).expect("write snapshot");
         return;
     }
-    let expected = std::fs::read_to_string(snapshot_path).unwrap_or_else(|e| {
+    let expected = std::fs::read_to_string(&snapshot_path).unwrap_or_else(|e| {
         panic!("{snapshot_path} missing ({e}); run UPDATE_SNAPSHOTS=1 cargo test query_")
     });
     assert_eq!(
         rendered, expected,
         "extraction changed vs {snapshot_path}; if intentional, regenerate with UPDATE_SNAPSHOTS=1 and review the diff"
     );
+}
+
+#[test]
+fn query_python_fixture_snapshot() {
+    assert_fixture_snapshot("python", "py", repomap::lang::Language::Python);
+}
+
+#[test]
+fn query_typescript_fixture_snapshot() {
+    assert_fixture_snapshot("typescript", "ts", repomap::lang::Language::TypeScript);
+}
+
+#[test]
+fn query_rust_fixture_snapshot() {
+    assert_fixture_snapshot("rust", "rs", repomap::lang::Language::Rust);
 }
 
 #[test]

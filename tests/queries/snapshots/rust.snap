@@ -1,0 +1,18 @@
+# extraction snapshot for queries/rust/tags.scm
+# regenerate: UPDATE_SNAPSHOTS=1 cargo test query_  (review the diff!)
+L7   Constant  Public  API_VERSION     :: pub const API_VERSION: &str = "1.0";
+L8   Constant  Public  GLOBAL_FLAG     :: pub static GLOBAL_FLAG: bool = false;
+L10  Function  Public  top_level       :: pub fn top_level(x: u32) -> u32 {
+L14  Function  Public  helper          :: fn helper(x: u32) -> u32 {
+L18  Class     Public  Service         :: pub struct Service {
+L22  Enum      Public  Level           :: pub enum Level {
+L27  Interface Public  Runner          :: pub trait Runner {
+L28  Method    Public  run             :: fn run(&self);
+L30  Function  Public  ready           :: fn ready(&self) -> bool {
+L36  Method    Public  new             :: pub fn new() -> Self {
+L44  Method    Public  run             :: fn run(&self) {
+L50  Module    Public  nested          :: pub mod nested {
+L51  TypeAlias Public  Alias           :: pub type Alias = u64;
+L54  Function  Public  shout           :: macro_rules! shout {
+imports: use std::collections::BTreeMap;
+references: from, helper, len, new

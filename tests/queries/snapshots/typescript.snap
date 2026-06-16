@@ -1,0 +1,15 @@
+# extraction snapshot for queries/typescript/tags.scm
+# regenerate: UPDATE_SNAPSHOTS=1 cargo test query_  (review the diff!)
+L5   Constant  Public  API_VERSION     :: export const API_VERSION: string = "1.0";
+L7   Function  Public  topLevel        :: export function topLevel(x: number): number {
+L11  Function  Public  arrow           :: const arrow = (x: number): number => x * 2;
+L13  Function  Public  helper          :: function helper(x: number): number {
+L17  Interface Public  Options         :: export interface Options {
+L21  TypeAlias Public  Format          :: export type Format = "md" | "json" | "xml";
+L23  Enum      Public  Level           :: export enum Level {
+L28  Class     Public  Service         :: export class Service {
+L29  Method    Public  run             :: run(): void {
+L33  Method    Public  helperMethod    :: private helperMethod(): void {
+L41  Function  Public  overloaded      :: export function overloaded(x: number | string): number | string {
+imports: "node:path"
+references: arrow, helper, helperMethod, join

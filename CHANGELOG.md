@@ -36,6 +36,10 @@ benchmark delta.
   append-only stats ledger, seeded with the baseline and probe rows.
 - Competitive-arms protocol (post-M1) in benchmark/README.md: repomap must
   beat Aider repo-map, ctags, and a file-tree control at equal budget.
+- Comprehension benchmark (benchmark/comprehension.sh + verified question
+  set for pytest 8.2.0): read-only Q&A sessions scored against answer keys;
+  hard gate in the loop — with-map accuracy must be ≥ without-map, so the
+  map can never trade correctness for token savings.
 
 ### Changed
 - run.sh delivers prompts via stdin (naive maps exceed ARG_MAX as an

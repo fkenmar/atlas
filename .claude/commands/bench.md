@@ -8,4 +8,4 @@ Run the benchmark and report the delta:
 3. Update the "**Last benchmark result:**" line in STATUS.md with the date, aggregate delta, and pass/fail.
 4. If any task regressed, list which ones and the subagent's findings about what they share — do not start fixing anything inside this command.
 
-If run.sh still emits stub (null) results, report that the harness integration (an M0 exit criterion) hasn't landed and skip step 3's numbers — write "stub run, no signal" instead.
+If the change being evaluated touches map content or rendering (extraction, ranking, budgeting, render), also run `./benchmark/comprehension.sh` and report the accuracy comparison — with-map accuracy below without-map is a hard fail (benchmark-protocol skill).

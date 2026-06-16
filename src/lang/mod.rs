@@ -36,7 +36,10 @@ impl Language {
     pub fn grammar(&self) -> Option<tree_sitter::Language> {
         match self {
             Language::Python => Some(tree_sitter::Language::new(tree_sitter_python::LANGUAGE)),
-            Language::TypeScript | Language::Rust => None,
+            Language::TypeScript => Some(tree_sitter::Language::new(
+                tree_sitter_typescript::LANGUAGE_TYPESCRIPT,
+            )),
+            Language::Rust => Some(tree_sitter::Language::new(tree_sitter_rust::LANGUAGE)),
         }
     }
 

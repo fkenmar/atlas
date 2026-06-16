@@ -240,10 +240,12 @@ fn is_const_name(name: &str) -> bool {
 /// language rather than crash (FR-12).
 fn compiled_query(lang: Language) -> Option<&'static Query> {
     static PYTHON: OnceLock<Option<Query>> = OnceLock::new();
+    static TYPESCRIPT: OnceLock<Option<Query>> = OnceLock::new();
+    static RUST: OnceLock<Option<Query>> = OnceLock::new();
     match lang {
         Language::Python => PYTHON.get_or_init(|| build_query(lang)).as_ref(),
-        // TS/JS and Rust grammars land in M1.
-        Language::TypeScript | Language::Rust => None,
+        Language::TypeScript => TYPESCRIPT.get_or_init(|| build_query(lang)).as_ref(),
+        Language::Rust => RUST.get_or_init(|| build_query(lang)).as_ref(),
     }
 }
 

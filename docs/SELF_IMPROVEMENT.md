@@ -36,6 +36,10 @@ human's job shrinks to the decisions only a human can make.
      previous timing;
    - agent behavior: `./benchmark/run.sh` (3 runs/arm, medians) and compare
      against benchmark/baseline.json AND the last history.md row;
+   - **understanding**: any change to what the map contains or how it reads
+     (extraction, ranking, budgeting/degradation, rendering) also runs
+     `./benchmark/comprehension.sh` — the map must not make agents faster
+     but wronger;
    - everything else: the gate itself is the measurement.
 6. **Decide and record.**
    - **Improved or neutral-by-design** (e.g. scaffolding for a later step —
@@ -55,6 +59,9 @@ human's job shrinks to the decisions only a human can make.
   better success-criterion pass rate, per benchmark/README.md hygiene
   (3 runs minimum, medians, variance flagged >15%). One metric up and one
   down = not an improvement; say which and why before keeping.
+- **Understanding (hard gate):** with-map comprehension accuracy ≥
+  without-map accuracy on the question set. Any accuracy drop is a
+  regression no token or turn win can buy back — revert or fix.
 - **Perf:** lower cold/warm wall time on the pinned repo, release build.
 - **Extraction:** snapshot diffs reviewed line-by-line; more correct
   symbols, not just more symbols.
@@ -63,11 +70,13 @@ human's job shrinks to the decisions only a human can make.
 
 ## Cost guards
 
-Benchmark iterations cost real money (~$0.3–1.5 per session; a 3-run
-two-task arm ≈ $3–5). The loop runs the benchmark only when the change can
-plausibly move agent behavior, never for refactors/docs/CI. If an iteration
-would push the session's benchmark spend past **$15**, pause and ask — that
-is a human gate, not a judgment call.
+Benchmark iterations cost real money (~$0.3–1.5 per edit-task session; a
+3-run two-task arm ≈ $3–5; a full comprehension pass — 10 read-only Q&A
+sessions per arm — ≈ $1–4). The loop runs benchmarks only when the change
+can plausibly move agent behavior or map content, never for
+refactors/docs/CI. If an iteration would push the session's total benchmark
+spend past **$15**, pause and ask — that is a human gate, not a judgment
+call.
 
 ## Stop conditions (end the loop, report, hand back)
 

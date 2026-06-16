@@ -36,7 +36,17 @@ The PRD-pure definition ("tokens before the first correct edit") needs transcrip
 - `tasks/*.yaml` — one task per file: `id`, `title`, `prompt` (verbatim agent task), `repo {url, rev}` (pinned), `success {check, cmd, anti_pattern}` (`cmd` is the machine-checkable form run.sh executes in the working clone), `notes`.
 - `baseline.json` — recorded no-map numbers, with the schema documented inside it. Regenerated **only** by `./run.sh --record-baseline`; a PreToolUse hook blocks hand edits, because a baseline you can casually edit is not a baseline.
 - `history.md` — append-only ledger: one row per measured change with its medians and Δ vs the previous comparable row, committed alongside the change (the self-improvement loop appends these — docs/SELF_IMPROVEMENT.md).
+- `comprehension.sh` + `comprehension/` — the understanding benchmark (section above); results land in `results/comprehension-*.local.json`.
 - `results/` — per-invocation outputs; `*.local.json` is gitignored.
+
+## Comprehension benchmark — understanding, not just speed
+
+Token and turn savings are worthless if the map makes agents **faster but wronger** — answering from signatures without verifying, or trusting a stale/misranked map. The comprehension benchmark guards that axis:
+
+- `comprehension/questions-<repo>-<rev>.yaml` — repo-understanding questions ("which class is the central config object?", "name the existing path-normalization helper") with answer keys of exact identifiers/paths, **every entry verified against the pinned clone before commit**.
+- `comprehension.sh` — runs each question as one read-only headless session per arm (no edit permissions, identical constraints), scores answers by substring match (`any`/`all`), reports per-arm accuracy plus median tokens/turns. `BENCH_QLIMIT=N` for smoke runs.
+- **The bar (hard gate in the self-improvement loop):** with-map accuracy ≥ without-map accuracy. An accuracy drop is a regression that no token win can buy back. Ideally the map *improves* accuracy — it puts the answer's location in context.
+- When the change is map content or rendering (extraction, ranking, budgeting, render), the loop runs this alongside the edit-task benchmark; competitor arms (below) apply here too once M1 lands.
 
 ## Competitive arms — the next protocol step (post-M1)
 
