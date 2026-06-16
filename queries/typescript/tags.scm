@@ -43,6 +43,17 @@
 (interface_declaration
   name: (type_identifier) @name) @definition.interface
 
+; Interface members and class fields (PRD §5.3).
+(interface_declaration
+  body: (interface_body
+    (property_signature
+      name: (property_identifier) @name) @definition.field))
+
+(class_declaration
+  body: (class_body
+    (public_field_definition
+      name: (property_identifier) @name) @definition.field))
+
 (type_alias_declaration
   name: (type_identifier) @name) @definition.type
 

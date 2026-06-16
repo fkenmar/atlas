@@ -5,6 +5,7 @@ L7   Function  Public  topLevel        :: export function topLevel(x: number): n
 L11  Function  Public  arrow           :: const arrow = (x: number): number => x * 2;
 L13  Function  Public  helper          :: function helper(x: number): number {
 L17  Interface Public  Options         :: export interface Options {
+L18  Field     Public  budget          :: budget: number;
 L21  TypeAlias Public  Format          :: export type Format = "md" | "json" | "xml";
 L23  Enum      Public  Level           :: export enum Level {
 L28  Class     Public  Service         :: export class Service {
