@@ -9,6 +9,19 @@ benchmark delta.
 ## [Unreleased]
 
 ### Added
+- M1 budget stage (FR-3, FR-11) + budgeted Markdown renderer (FR-5, md): greedy
+  packing into a token budget (default 2,048) with exact BPE counts from
+  tiktoken-rs `cl100k_base`, behind a pluggable `Tokenizer` trait. Degradation
+  ladder per PRD §5.1, in order: drop private symbols → strip parameter names
+  (bracket-depth-aware, types kept) → collapse low-rank files into a
+  directory-skeleton footer that always retains every file (none lost).
+  Detail reduction is global and tried first; only an overflowing most-compact
+  listing triggers greedy per-file collapse. Deterministic (score-desc via
+  `f64::total_cmp`, BTreeMap-grouped footer). A rust-reviewer pass caught and
+  fixed a lost-file bug (empty files vanished from both listing and footer) and
+  a param-stripping bug (operator `>` in a default masked the next param), both
+  now regression-tested. Benchmark owed at M1 CLI integration (the budgeted
+  path isn't wired into the CLI yet).
 - M1 rank stage (FR-4): personalized PageRank over the link graph — in-house
   power iteration (damping 0.85, ≤20 iterations, L1 convergence check per
   PRD §7.2). Dangling Symbol-node mass is redistributed through the teleport
