@@ -19,9 +19,13 @@ Per arm, per run, we record:
 
 v0.1 target: **≥25% reduction in exploration tokens** (aggregate across tasks).
 
-### M0 metric operationalization
+### Metric operationalization (M1 refinement — results schema_version 3)
 
-The PRD-pure definition ("tokens before the first correct edit") needs transcript analysis; until that lands, the M0 proxy recorded by run.sh is **total input-side tokens processed per session** (fresh input + cache creation + cache reads from the headless `claude -p` usage report) plus `num_turns`. Both arms are measured identically, sessions run in `acceptEdits` permission mode (file edits allowed, no shell — same constraints for both arms), so comparisons are valid; only the absolute numbers will shift when the metric is refined. Recorded baselines state model and turn cap in their `environment` field — a baseline is only comparable against runs with the same settings.
+The reported number is now **`exploration_tokens`: the input-side tokens (fresh input + cache creation + cache reads) the agent processes *up to and including the turn of its first file edit*** — computed by `metric.py` from the `--output-format stream-json` transcript. This isolates the exploration phase the map is meant to shrink and, critically, stops counting at the first edit, so editing/verification/retry turns and a 30-turn-cap blowout no longer dominate the number (the failure mode that made the M0 proxy too noisy — see history.md, the 2026-06-16 checkpoint). A session that never edits has `exploration_tokens == total_tokens` (it explored the whole time). `total_tokens` (the old whole-session sum) and `turns_to_first_edit` are recorded alongside for context.
+
+Both arms are measured identically in `acceptEdits` permission mode (file edits allowed, no shell), so comparisons are valid. **This metric is not comparable to the old M0 proxy** (results schema ≤ 2 / `baseline.json` schema 1): the baseline must be re-recorded with `run.sh --record-baseline` before the new numbers can be compared against it. Recorded baselines state model and turn cap in their `environment` field — a baseline is only comparable against runs with the same settings.
+
+The **old M0 proxy** was total input-side tokens across the *whole* session plus `num_turns` — accurate but turn-cap-dominated, so a long verification phase could swamp the exploration signal.
 
 ## Protocol
 

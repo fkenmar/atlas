@@ -101,7 +101,9 @@ for t in "${tasks[@]}"; do
   arm_objects=()
   for arm in $BENCH_ARMS; do
     tokens_list=""
+    total_tokens_list=""
     turns_list=""
+    first_edit_list=""
     cost_list=""
     pass_count=0
     for run_idx in $(seq 1 "$BENCH_RUNS"); do
@@ -132,40 +134,50 @@ for t in "${tasks[@]}"; do
       fi
 
       echo "[${id}] ${arm} run ${run_idx}/${BENCH_RUNS} …"
-      session_json="${workdir}/.session.json"
+      session_jsonl="${workdir}/.session.jsonl"
       # acceptEdits: file edits allowed, bash denied — identical constraints
       # across arms, and the agent can't make network calls or run code.
+      # stream-json gives the per-turn message + tool-use breakdown the
+      # exploration metric needs (metric.py).
       (
         cd "$workdir"
         env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT claude -p \
-          --output-format json \
+          --output-format stream-json --verbose \
           --model "$BENCH_MODEL" \
           --max-turns "$BENCH_MAX_TURNS" \
           --permission-mode acceptEdits \
           < "$prompt_file"
-      ) > "$session_json" 2>"${workdir}/.session.err" || true
+      ) > "$session_jsonl" 2>"${workdir}/.session.err" || true
 
-      # M0 token metric: total input-side tokens processed (fresh + cache
-      # creation + cache reads) — the proxy for exploration cost until the
-      # tokens-before-first-correct-edit refinement (see README.md).
-      tokens="$(jq -r '((.usage.input_tokens // 0) + (.usage.cache_creation_input_tokens // 0) + (.usage.cache_read_input_tokens // 0))' "$session_json" 2>/dev/null || echo null)"
-      turns="$(jq -r '.num_turns // null' "$session_json" 2>/dev/null || echo null)"
-      cost="$(jq -r '.total_cost_usd // null' "$session_json" 2>/dev/null || echo null)"
+      # Refined metric (M1): exploration_tokens = input-side tokens processed
+      # up to and including the agent's first edit (benchmark/metric.py),
+      # isolating the exploration the map shrinks. The old whole-session total
+      # is kept as total_tokens for comparison; both come from the same stream.
+      metrics="$(python3 metric.py < "$session_jsonl" 2>/dev/null || echo '{}')"
+      tokens="$(printf '%s' "$metrics" | jq -r '.exploration_tokens // null')"
+      total_tokens="$(printf '%s' "$metrics" | jq -r '.total_tokens // null')"
+      turns="$(printf '%s' "$metrics" | jq -r '.num_turns // null')"
+      first_edit_turn="$(printf '%s' "$metrics" | jq -r '.turns_to_first_edit // null')"
+      cost="$(printf '%s' "$metrics" | jq -r '.cost_usd // null')"
 
       passed=false
       if (cd "$workdir" && bash -c "$success_cmd" >/dev/null 2>&1); then
         passed=true
         pass_count=$((pass_count + 1))
       fi
-      echo "[${id}] ${arm} run ${run_idx}: tokens=${tokens} turns=${turns} cost=\$${cost} passed=${passed}"
+      echo "[${id}] ${arm} run ${run_idx}: explore=${tokens} total=${total_tokens} turns=${turns} first_edit_turn=${first_edit_turn} cost=\$${cost} passed=${passed}"
 
       [ "$tokens" != "null" ] && tokens_list="${tokens_list}${tokens}"$'\n'
+      [ "$total_tokens" != "null" ] && total_tokens_list="${total_tokens_list}${total_tokens}"$'\n'
       [ "$turns" != "null" ] && turns_list="${turns_list}${turns}"$'\n'
+      [ "$first_edit_turn" != "null" ] && first_edit_list="${first_edit_list}${first_edit_turn}"$'\n'
       [ "$cost" != "null" ] && cost_list="${cost_list}${cost}"$'\n'
     done
 
     median_tokens="$(printf '%s' "$tokens_list" | median_of)"
+    median_total_tokens="$(printf '%s' "$total_tokens_list" | median_of)"
     median_turns="$(printf '%s' "$turns_list" | median_of)"
+    median_first_edit="$(printf '%s' "$first_edit_list" | median_of)"
     median_cost="$(printf '%s' "$cost_list" | median_of)"
 
     # Protocol: >15% token spread across runs makes the comparison suspect —
@@ -187,14 +199,16 @@ for t in "${tasks[@]}"; do
     arm_objects+=("$(jq -n \
       --arg arm "$arm" \
       --argjson tokens "$median_tokens" \
+      --argjson total_tokens "$median_total_tokens" \
       --argjson turns "$median_turns" \
+      --argjson first_edit "$median_first_edit" \
       --argjson cost "$median_cost" \
       --argjson runs "$BENCH_RUNS" \
       --argjson passes "$pass_count" \
       --argjson per_tokens "$per_run_tokens" \
       --argjson per_turns "$per_run_turns" \
       --argjson vnote "$variance_note" \
-      '{arm: $arm, exploration_tokens: $tokens, turns: $turns, cost_usd: $cost, runs: $runs, passed_runs: $passes, per_run_tokens: $per_tokens, per_run_turns: $per_turns, variance_note: $vnote}')")
+      '{arm: $arm, exploration_tokens: $tokens, total_tokens: $total_tokens, turns: $turns, turns_to_first_edit: $first_edit, cost_usd: $cost, runs: $runs, passed_runs: $passes, per_run_tokens: $per_tokens, per_run_turns: $per_turns, variance_note: $vnote}')")
   done
 
   task_objects+=("$(jq -n \
@@ -204,13 +218,14 @@ for t in "${tasks[@]}"; do
 done
 
 jq -n \
-  --argjson schema 2 \
+  --argjson schema 3 \
+  --arg metric "exploration_tokens = input-side tokens up to the first edit (metric.py); not comparable to schema<=2 whole-session totals" \
   --arg timestamp "$stamp" \
   --arg model "$BENCH_MODEL" \
   --argjson runs "$BENCH_RUNS" \
   --argjson max_turns "$BENCH_MAX_TURNS" \
   --argjson tasks "$(printf '%s\n' "${task_objects[@]}" | jq -s '.')" \
-  '{schema_version: $schema, timestamp: $timestamp, model: $model, runs_per_arm: $runs, max_turns: $max_turns, stub: false, tasks: $tasks}' \
+  '{schema_version: $schema, metric: $metric, timestamp: $timestamp, model: $model, runs_per_arm: $runs, max_turns: $max_turns, stub: false, tasks: $tasks}' \
   > "$out"
 echo "wrote ${out}"
 
