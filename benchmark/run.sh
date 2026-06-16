@@ -33,7 +33,7 @@ mkdir -p results .work
 
 BENCH_MODEL="${BENCH_MODEL:-claude-sonnet-4-6}"
 BENCH_RUNS="${BENCH_RUNS:-3}"
-BENCH_MAX_TURNS="${BENCH_MAX_TURNS:-30}"
+BENCH_MAX_TURNS="${BENCH_MAX_TURNS:-45}"
 BENCH_ARMS="${BENCH_ARMS:-without_map}"
 REPOMAP_BIN="${REPOMAP_BIN:-../target/release/repomap}"
 
@@ -109,6 +109,7 @@ for t in "${tasks[@]}"; do
     mcost=""
     per_run_json=""
     pass_count=0
+    cap_count=0
     for run_idx in $(seq 1 "$BENCH_RUNS"); do
       workdir=".work/run-${id}-${arm}-${run_idx}"
       rm -rf "$workdir"
@@ -161,11 +162,12 @@ for t in "${tasks[@]}"; do
         tokens="$(printf '%s' "$metrics" | jq -r '.exploration_tokens')"
         total_tokens="$(printf '%s' "$metrics" | jq -r '.total_tokens')"
         turns="$(printf '%s' "$metrics" | jq -r '.num_turns')"
-        first_edit_turn="$(printf '%s' "$metrics" | jq -r '.turns_to_first_edit')"
+        amfe="$(printf '%s' "$metrics" | jq -r '.assistant_msgs_to_first_edit')"
+        capped="$(printf '%s' "$metrics" | jq -r '.capped')"
         cost="$(printf '%s' "$metrics" | jq -r '.cost_usd // null')"
       else
         echo "[${id}] ${arm} run ${run_idx}: FAILED session (claude exit ${claude_status}; metric.py rejected the stream) — recorded null"
-        tokens=null total_tokens=null turns=null first_edit_turn=null cost=null
+        tokens=null total_tokens=null turns=null amfe=null capped=null cost=null
       fi
 
       # Success criterion is authoritative for pass/fail; a null-metric run
@@ -175,22 +177,25 @@ for t in "${tasks[@]}"; do
         passed=true
         pass_count=$((pass_count + 1))
       fi
-      echo "[${id}] ${arm} run ${run_idx}: explore=${tokens} total=${total_tokens} turns=${turns} first_edit_turn=${first_edit_turn} cost=\$${cost} passed=${passed}"
+      [ "$capped" = "true" ] && cap_count=$((cap_count + 1))
+      echo "[${id}] ${arm} run ${run_idx}: explore=${tokens} total=${total_tokens} turns=${turns} amsgs_to_edit=${amfe} capped=${capped} cost=\$${cost} passed=${passed}"
 
       # Per-run diagnostic record — EVERY run, including failures (the outliers
       # are exactly what we want to see).
       per_run_json="${per_run_json}$(jq -n \
         --argjson e "$tokens" --argjson t "$total_tokens" --argjson n "$turns" \
-        --argjson f "$first_edit_turn" --argjson c "$cost" --argjson p "$passed" \
-        '{exploration_tokens:$e, total_tokens:$t, num_turns:$n, turns_to_first_edit:$f, cost_usd:$c, passed:$p}')"$'\n'
+        --argjson f "$amfe" --argjson c "$cost" --argjson p "$passed" --argjson cap "${capped:-null}" \
+        '{exploration_tokens:$e, total_tokens:$t, num_turns:$n, assistant_msgs_to_first_edit:$f, cost_usd:$c, passed:$p, capped:$cap}')"$'\n'
 
-      # Medians use PASSING runs only — a run that edited early but failed is
-      # not a valid exploration sample and would bias the median down.
-      if [ "$passed" = true ]; then
+      # Medians use PASSING, NON-CAPPED runs only. A capped (error_max_turns)
+      # session is incomplete — its token count is cap-contaminated and is the
+      # dominant variance source (review finding) — and a failed run isn't a
+      # valid exploration sample.
+      if [ "$passed" = true ] && [ "$capped" != "true" ]; then
         mtok="${mtok}${tokens}"$'\n'
         mtotal="${mtotal}${total_tokens}"$'\n'
         mturns="${mturns}${turns}"$'\n'
-        mfedit="${mfedit}${first_edit_turn}"$'\n'
+        mfedit="${mfedit}${amfe}"$'\n'
         [ "$cost" != "null" ] && mcost="${mcost}${cost}"$'\n'
       fi
     done
@@ -225,9 +230,10 @@ for t in "${tasks[@]}"; do
       --argjson cost "$median_cost" \
       --argjson runs "$BENCH_RUNS" \
       --argjson passes "$pass_count" \
+      --argjson capped "$cap_count" \
       --argjson per_run "$per_run" \
       --argjson vnote "$variance_note" \
-      '{arm: $arm, exploration_tokens: $tokens, total_tokens: $total_tokens, turns: $turns, turns_to_first_edit: $first_edit, cost_usd: $cost, runs: $runs, passed_runs: $passes, median_over: "passing runs only", per_run: $per_run, variance_note: $vnote}')")
+      '{arm: $arm, exploration_tokens: $tokens, total_tokens: $total_tokens, turns: $turns, assistant_msgs_to_first_edit: $first_edit, cost_usd: $cost, runs: $runs, passed_runs: $passes, capped_runs: $capped, median_over: "passing, non-capped runs", per_run: $per_run, variance_note: $vnote}')")
   done
 
   task_objects+=("$(jq -n \

@@ -48,6 +48,7 @@ def main():
     cost_usd = None
     num_turns = None
     saw_result = False
+    result_subtype = None
 
     for line in sys.stdin:
         line = line.strip()
@@ -76,6 +77,7 @@ def main():
                         break
         elif etype == "result":
             saw_result = True
+            result_subtype = ev.get("subtype")
             cost_usd = ev.get("total_cost_usd")
             num_turns = ev.get("num_turns")
 
@@ -99,8 +101,17 @@ def main():
             {
                 "exploration_tokens": exploration,
                 "total_tokens": total,
-                "turns_to_first_edit": turns_to_first_edit,
+                # Counted in ASSISTANT MESSAGES, not claude `num_turns` — a turn
+                # with extended thinking emits a separate thinking message, so
+                # this scale exceeds num_turns. Don't compare the two.
+                "assistant_msgs_to_first_edit": turns_to_first_edit,
+                "assistant_msgs": turn,
                 "num_turns": num_turns if num_turns is not None else turn,
+                # error_max_turns = the session hit the turn cap (incomplete);
+                # the caller drops these from medians — their token counts are
+                # cap-contaminated, the main variance source.
+                "capped": result_subtype == "error_max_turns",
+                "result_subtype": result_subtype,
                 "cost_usd": cost_usd,
                 "edited": first_edit_seen,
             }
