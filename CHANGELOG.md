@@ -9,6 +9,14 @@ benchmark delta.
 ## [Unreleased]
 
 ### Changed
+- **Adaptive skeleton footer** — the biggest density win so far. A
+  full-granularity collapsed-file footer dominated the budget on large repos
+  (pytest: 58 directory groups, ~32% of the whole map). The footer now coarsens
+  to the *finest* directory depth whose group count stays ≤16, keeping the
+  high-level shape while reclaiming the rest. pytest's footer fell from 2,491 →
+  115 chars, and that freed ~30% of the budget now shows **10 files / 143
+  symbol lines instead of 4** at the same 2,048-token budget — far more real API
+  per token.
 - **Lossless signature/import compression**: trailing syntactic noise carried
   in from the source line — an opening `{`, a Python/trait `:`/`;` — and import
   boilerplate (`use `, `;`, quotes) are dropped, keeping the declaration and

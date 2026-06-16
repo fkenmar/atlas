@@ -464,13 +464,58 @@ fn collapse_complement(
 }
 
 /// Group a set of file indices by directory for the collapsed footer.
+/// Group collapsed files into the skeleton footer. On a large repo a
+/// full-granularity listing dominates the budget (pytest: 58 groups, ~32% of
+/// the map), so coarsen to the *finest* directory depth whose group count
+/// stays within [`MAX_FOOTER_GROUPS`] — keeping the high-level shape while
+/// freeing the bulk of those tokens for real API.
 fn collapse_dirs(indices: &[usize], files: &[(SourceFile, ParsedFile)]) -> Vec<CollapsedDir> {
+    const MAX_FOOTER_GROUPS: usize = 16;
+    let max_depth = indices
+        .iter()
+        .map(|&fi| dir_depth(&files[fi].0.rel))
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    // Group count is monotonic non-decreasing in depth; keep the finest depth
+    // that still fits, falling back to the coarsest (depth 1).
+    let mut chosen = grouped_dirs(indices, files, 1);
+    for depth in 2..=max_depth {
+        let groups = grouped_dirs(indices, files, depth);
+        if groups.len() <= MAX_FOOTER_GROUPS {
+            chosen = groups;
+        } else {
+            break;
+        }
+    }
+    chosen
+}
+
+/// Number of directory segments in a relative path (`a/b/c.py` → 2).
+fn dir_depth(rel: &str) -> usize {
+    rel.matches('/').count()
+}
+
+/// Group collapsed files by the first `depth` segments of their directory.
+fn grouped_dirs(
+    indices: &[usize],
+    files: &[(SourceFile, ParsedFile)],
+    depth: usize,
+) -> Vec<CollapsedDir> {
     let mut by_dir: BTreeMap<String, usize> = BTreeMap::new();
     for &fi in indices {
         let rel = &files[fi].0.rel;
-        // A file with no visible content still belongs in the skeleton.
-        let dir = rel.rsplit_once('/').map_or(".", |(d, _)| d).to_string();
-        *by_dir.entry(dir).or_insert(0) += 1;
+        let dir = rel.rsplit_once('/').map_or("", |(d, _)| d);
+        // A root-level file (no directory) still belongs in the skeleton.
+        let key = if dir.is_empty() {
+            ".".to_string()
+        } else {
+            dir.split('/')
+                .take(depth.max(1))
+                .collect::<Vec<_>>()
+                .join("/")
+        };
+        *by_dir.entry(key).or_insert(0) += 1;
     }
     by_dir
         .into_iter()
