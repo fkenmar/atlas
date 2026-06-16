@@ -40,6 +40,14 @@ benchmark delta.
   freed enough budget to show the entire real API at full signature fidelity.
 
 ### Added
+- M1 incremental cache (FR-6): parse results are cached in `.repomap/cache`
+  (bincode), keyed on each file's content hash plus a cache version. Unchanged
+  files reuse their stored parse instead of re-running tree-sitter; a changed
+  hash or version bump invalidates. Files not seen in a run are pruned on save.
+  The cache is purely an optimization — every I/O or decode error degrades
+  silently to a cold parse, never an error — and `.repomap/` is gitignored.
+  `parse_all` keeps its uncached signature (delegates to a disabled cache);
+  the CLI uses the cached path. Cold and warm runs produce byte-identical maps.
 - M1 JSON renderer (FR-5/json): `--format json` emits the versioned PRD §7.3
   schema (`version`, `repo`, `budget{target,rendered,detail}`, `files[{path,
   lang,rank,score,imported_by,one_line,symbols[{kind,name,sig,line,

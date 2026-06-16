@@ -77,7 +77,9 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         files.retain(|f| langs.contains(&f.lang));
     }
 
-    let outcome = crate::parse::parse_all(files);
+    let mut cache = crate::cache::Cache::open(&root);
+    let outcome = crate::parse::parse_all_cached(files, &mut cache);
+    cache.save();
     let graph = crate::link::link(&outcome.files);
     let focus = resolve_focus(&cli.focus, &root, &outcome.files);
     let ranking = crate::rank::rank(&graph, &focus);

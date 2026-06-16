@@ -13,7 +13,7 @@ Next milestone: **M1 — Core (v0.1 alpha)**: TS/JS + Rust grammars; import link
 
 | NOW | NEXT | NOT-YET |
 |---|---|---|
-| ~~TS/JS grammar (tree-sitter-typescript)~~ ✅ done 2026-06-16 | Incremental cache + warm path (M1) | MCP server (M2) |
+| ~~TS/JS grammar (tree-sitter-typescript)~~ ✅ done 2026-06-16 | ~~Incremental cache + warm path~~ ✅ done 2026-06-16 (FR-6) | MCP server (M2) |
 | ~~Rust grammar (tree-sitter-rust)~~ ✅ done 2026-06-16 | rayon parallel parse (M1) | --watch daemon (M2) |
 | ~~Import linking → index-based graph (ADR 0002)~~ ✅ done 2026-06-16 | clap CLI: --budget/--format/--focus (M1; opens the CI self-map gate) | --focus personalization (M2) |
 | ~~PageRank over the graph~~ ✅ done 2026-06-16 | .gitignore/.repomapignore in discover (FR-7, M1) | cargo-dist packaging (M2) |

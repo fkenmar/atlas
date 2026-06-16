@@ -10,11 +10,12 @@ use std::sync::OnceLock;
 
 use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 
+use crate::cache::Cache;
 use crate::discover::SourceFile;
 use crate::lang::Language;
 
 /// A declaration extracted from one file.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, bincode::Encode, bincode::Decode)]
 pub struct Symbol {
     pub name: String,
     pub kind: SymbolKind,
@@ -26,7 +27,7 @@ pub struct Symbol {
     pub visibility: Visibility,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub enum SymbolKind {
     Function,
     Method,
@@ -64,14 +65,14 @@ impl SymbolKind {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub enum Visibility {
     Public,
     Private,
 }
 
 /// Parse result for one file: declarations plus outgoing edges-to-be.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, bincode::Encode, bincode::Decode)]
 pub struct ParsedFile {
     /// Sorted by (line, name) — deterministic (NFR-4).
     pub symbols: Vec<Symbol>,
@@ -100,8 +101,17 @@ pub struct ParseOutcome {
 }
 
 /// Parse every discovered file, partitioning into parsed / skipped /
-/// not-yet-wired (FR-12: nothing here ever panics on input).
+/// not-yet-wired (FR-12: nothing here ever panics on input). Uncached — see
+/// [`parse_all_cached`] for the warm-path variant the CLI uses.
 pub fn parse_all(files: Vec<SourceFile>) -> ParseOutcome {
+    parse_all_cached(files, &mut Cache::disabled())
+}
+
+/// Parse with the incremental cache (FR-6): an unchanged file (same content
+/// hash) reuses its stored parse instead of re-running tree-sitter. The hash
+/// is computed from the single read this function already performs, so the
+/// warm path never reads a file twice.
+pub fn parse_all_cached(files: Vec<SourceFile>, cache: &mut Cache) -> ParseOutcome {
     let mut out = ParseOutcome {
         files: Vec::new(),
         stats: ParseStats::default(),
@@ -111,14 +121,27 @@ pub fn parse_all(files: Vec<SourceFile>) -> ParseOutcome {
             out.stats.unwired_files += 1;
             continue;
         }
-        match parse_file(&file) {
-            Some(parsed) => {
-                out.stats.parsed_files += 1;
-                out.stats.total_lines += parsed.lines;
-                out.files.push((file, parsed));
-            }
-            None => out.stats.skipped_files += 1,
-        }
+        let Ok(source) = std::fs::read_to_string(&file.path) else {
+            out.stats.skipped_files += 1;
+            continue;
+        };
+        let hash = crate::cache::content_hash(&source);
+        let parsed = match cache.get(&file.rel, hash) {
+            Some(parsed) => parsed,
+            None => match parse_source(&file, &source) {
+                Some(parsed) => {
+                    cache.insert(&file.rel, hash, &parsed);
+                    parsed
+                }
+                None => {
+                    out.stats.skipped_files += 1;
+                    continue;
+                }
+            },
+        };
+        out.stats.parsed_files += 1;
+        out.stats.total_lines += parsed.lines;
+        out.files.push((file, parsed));
     }
     out
 }
@@ -128,12 +151,18 @@ pub fn parse_all(files: Vec<SourceFile>) -> ParseOutcome {
 /// and the renderer reports the count in a footer line (FR-12).
 pub fn parse_file(file: &SourceFile) -> Option<ParsedFile> {
     let source = std::fs::read_to_string(&file.path).ok()?;
+    parse_source(file, &source)
+}
+
+/// Parse already-in-memory source. Split out so the cache path
+/// ([`parse_all_cached`]) can hash the content and parse from a single read.
+fn parse_source(file: &SourceFile, source: &str) -> Option<ParsedFile> {
     let grammar = file.lang.grammar()?;
     let query = compiled_query(file.lang)?;
 
     let mut parser = Parser::new();
     parser.set_language(&grammar).ok()?;
-    let tree = parser.parse(&source, None)?;
+    let tree = parser.parse(source, None)?;
 
     let lines: Vec<&str> = source.lines().collect();
     let capture_names = query.capture_names();
