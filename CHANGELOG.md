@@ -9,6 +9,14 @@ benchmark delta.
 ## [Unreleased]
 
 ### Added
+- M1 grammars (FR-1): TypeScript/JavaScript (tree-sitter-typescript 0.23.2)
+  and Rust (tree-sitter-rust 0.24.2) wired end-to-end — per-language
+  `grammar()` handle + compiled tags.scm query, with extraction snapshot tests
+  now covering all three Tier 1 languages. Snapshot review caught two real
+  extraction bugs: Rust trait methods with a default body were mis-tagged as
+  free functions, and TypeScript ambient (`declare`) / overload signatures
+  (`function_signature` nodes, distinct from `function_declaration`) were
+  dropped entirely — both are now extracted.
 - M0 naive pipeline: tree-sitter + Python grammar wired (tree-sitter 0.26.9,
   tree-sitter-python 0.25.0); discover walks with vendored-path/hidden-dir
   exclusion and sorted output; parse extracts defs/imports/calls via the

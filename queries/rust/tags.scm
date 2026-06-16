@@ -29,6 +29,15 @@
     (function_signature_item
       name: (identifier) @name) @definition.method))
 
+; Trait methods with a default body parse as `function_item` (like a free
+; function); capture them as methods so they are not mis-tagged. The dedup
+; priority in src/parse.rs lets this method match win over the free-function
+; pattern that also matches the same node.
+(trait_item
+  body: (declaration_list
+    (function_item
+      name: (identifier) @name) @definition.method))
+
 ; Types.
 (struct_item
   name: (type_identifier) @name) @definition.class

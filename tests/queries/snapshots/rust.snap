@@ -8,7 +8,7 @@ L18  Class     Public  Service         :: pub struct Service {
 L22  Enum      Public  Level           :: pub enum Level {
 L27  Interface Public  Runner          :: pub trait Runner {
 L28  Method    Public  run             :: fn run(&self);
-L30  Function  Public  ready           :: fn ready(&self) -> bool {
+L30  Method    Public  ready           :: fn ready(&self) -> bool {
 L36  Method    Public  new             :: pub fn new() -> Self {
 L44  Method    Public  run             :: fn run(&self) {
 L50  Module    Public  nested          :: pub mod nested {

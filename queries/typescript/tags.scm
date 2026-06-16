@@ -10,11 +10,17 @@
 ;
 ; Validate against tests/queries/fixtures/typescript.ts; node names come from
 ; `cargo run --example dump-ast <file>`, never from guessing.
-; Overload signatures and ambient (`declare`) declarations reuse the same
-; declaration node kinds, so the patterns below cover them.
+; Overload signatures and ambient (`declare`) declarations parse as
+; `function_signature` (no body) — a distinct node kind from
+; `function_declaration` — captured by the dedicated rule below so the public
+; surface of `.d.ts` files and overload sets is not dropped.
 
-; Function declarations.
+; Function declarations (with a body).
 (function_declaration
+  name: (identifier) @name) @definition.function
+
+; Overload signatures and ambient `declare function …;` (no body).
+(function_signature
   name: (identifier) @name) @definition.function
 
 ; Arrow functions / function expressions bound to const/let.
