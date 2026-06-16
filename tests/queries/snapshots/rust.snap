@@ -5,6 +5,7 @@ L8   Constant  Public  GLOBAL_FLAG     :: pub static GLOBAL_FLAG: bool = false;
 L10  Function  Public  top_level       :: pub fn top_level(x: u32) -> u32 {
 L14  Function  Private helper          :: fn helper(x: u32) -> u32 {
 L18  Class     Public  Service         :: pub struct Service {
+L19  Field     Private names           :: names: BTreeMap<String, u32>,
 L22  Enum      Public  Level           :: pub enum Level {
 L27  Interface Public  Runner          :: pub trait Runner {
 L28  Method    Private run             :: fn run(&self);

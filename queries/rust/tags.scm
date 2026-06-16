@@ -42,6 +42,12 @@
 (struct_item
   name: (type_identifier) @name) @definition.class
 
+; Struct fields (PRD §5.3).
+(struct_item
+  body: (field_declaration_list
+    (field_declaration
+      name: (field_identifier) @name) @definition.field))
+
 (enum_item
   name: (type_identifier) @name) @definition.enum
 
