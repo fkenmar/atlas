@@ -59,7 +59,7 @@ pub fn render(map: &BudgetedMap) -> String {
             let _ = writeln!(out, "## {} (#{})", file.rel, file.rank);
         }
         for symbol in &file.symbols {
-            let indent = if symbol.kind == SymbolKind::Method {
+            let indent = if matches!(symbol.kind, SymbolKind::Method | SymbolKind::Field) {
                 "    "
             } else {
                 ""
@@ -123,7 +123,7 @@ pub fn render_naive_map(repo_name: &str, outcome: &ParseOutcome) -> String {
         out.push('\n');
         let _ = writeln!(out, "## {}", file.rel);
         for symbol in &parsed.symbols {
-            let indent = if symbol.kind == SymbolKind::Method {
+            let indent = if matches!(symbol.kind, SymbolKind::Method | SymbolKind::Field) {
                 "    "
             } else {
                 ""

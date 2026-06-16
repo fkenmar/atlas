@@ -71,6 +71,15 @@ benchmark delta.
   freed enough budget to show the entire real API at full signature fidelity.
 
 ### Added
+- **Class fields are now extracted (Python)** — PRD §5.3 shows fields in the
+  map (`class User # fields: id, email, …`), but classes were rendered without
+  them. Annotated class-body attributes (dataclass/attrs fields, typed class
+  attributes — `name: Type` / `name: Type = default`) are now extracted as a
+  new `field` symbol kind and rendered indented under their class. This gives
+  field-editing tasks (e.g. "add a field to a dataclass") the existing field
+  set directly, without reading the file. Visibility follows the underscore
+  convention; the cache version bumped (extraction output changed). Rust struct
+  fields and TS class/interface members are a follow-up.
 - M1 ignore handling (FR-7): discover now reads root-level `.gitignore` and
   `.repomapignore` and skips matching files/dirs during the walk (in addition
   to the built-in vendored-path defaults). The hand-rolled matcher supports the

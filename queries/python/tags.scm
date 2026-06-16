@@ -50,6 +50,17 @@
     (assignment
       left: (identifier) @name) @definition.constant))
 
+; Class fields: annotated class-body assignments (dataclass/attrs fields,
+; typed class attributes) — `name: Type` or `name: Type = default`. PRD §5.3
+; shows fields in the map; the `type:` requirement avoids plain method-body
+; statements and keeps this to declared attributes.
+(class_definition
+  body: (block
+    (expression_statement
+      (assignment
+        left: (identifier) @name
+        type: (_)) @definition.field)))
+
 ; Imports.
 (import_statement
   name: (dotted_name) @name) @reference.import

@@ -12,7 +12,7 @@ use crate::parse::ParsedFile;
 /// Bumped whenever extraction output or the grammar set changes, so a stale
 /// cache from an older repomap is discarded wholesale rather than returning
 /// out-of-date symbols. (Tie to grammar crate versions once they're surfaced.)
-const CACHE_VERSION: u32 = 1;
+const CACHE_VERSION: u32 = 2;
 
 #[derive(bincode::Encode, bincode::Decode)]
 struct CacheEntry {

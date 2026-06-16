@@ -33,6 +33,15 @@ class Service:
         pass
 
 
+class Mark:
+    """A dataclass-style class with annotated fields (PRD §5.3)."""
+
+    name: str
+    args: tuple
+    description: str | None = None
+    _internal: int = 0
+
+
 def decorating(fn):
     return fn
 

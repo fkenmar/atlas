@@ -99,6 +99,7 @@ fn kind_name(kind: SymbolKind) -> &'static str {
         SymbolKind::TypeAlias => "type",
         SymbolKind::Constant => "constant",
         SymbolKind::Module => "module",
+        SymbolKind::Field => "field",
     }
 }
 

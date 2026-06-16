@@ -8,8 +8,13 @@ L21  Class     Public  Service         :: class Service:
 L25  Method    Public  name            :: def name(self) -> str:
 L28  Method    Public  run             :: def run(self) -> None:
 L32  Method    Public  helper_method   :: def helper_method() -> None:
-L36  Function  Public  decorating      :: def decorating(fn):
-L41  Function  Public  decorated       :: def decorated() -> None:
-L46  Class     Public  DecoratedService :: class DecoratedService:
+L36  Class     Public  Mark            :: class Mark:
+L39  Field     Public  name            :: name: str
+L40  Field     Public  args            :: args: tuple
+L41  Field     Public  description     :: description: str | None = None
+L42  Field     Private _internal       :: _internal: int = 0
+L45  Function  Public  decorating      :: def decorating(fn):
+L50  Function  Public  decorated       :: def decorated() -> None:
+L55  Class     Public  DecoratedService :: class DecoratedService:
 imports: os, typing
 references: get, helper, helper_method

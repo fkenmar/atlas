@@ -37,6 +37,8 @@ pub enum SymbolKind {
     TypeAlias,
     Constant,
     Module,
+    // Field kept last so existing bincode variant indices are unchanged.
+    Field,
 }
 
 impl SymbolKind {
@@ -50,6 +52,7 @@ impl SymbolKind {
             "type" => Some(SymbolKind::TypeAlias),
             "constant" => Some(SymbolKind::Constant),
             "module" => Some(SymbolKind::Module),
+            "field" => Some(SymbolKind::Field),
             _ => None,
         }
     }

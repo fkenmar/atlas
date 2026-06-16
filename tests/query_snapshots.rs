@@ -20,6 +20,7 @@ const DEFINITION_KINDS: &[&str] = &[
     "type",
     "constant",
     "module",
+    "field",
 ];
 
 fn assert_tags_contract(lang: &str) {
