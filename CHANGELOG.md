@@ -9,6 +9,18 @@ benchmark delta.
 ## [Unreleased]
 
 ### Changed
+- Budget rung 3 + ranking, both found by dogfooding the map on pytest (92k LOC):
+  - **One-line rung:** a file whose full block overflows the remaining budget
+    now collapses to a one-line summary (`## path (#rank, N symbols)`) instead
+    of dropping the whole file — fixing a degenerate case where a single huge
+    top-ranked file blanked out the entire map (pytest rendered 0 content files
+    before this; now it shows the core modules).
+  - **Ranking count-bias fix:** a file's score summed its symbols' raw PageRank,
+    so a file's symbol COUNT dominated — 200-test-function files swamped the
+    core API. Now each symbol contributes only its rank *earned above the
+    uniform teleport baseline*, so trivial (never-referenced) symbols add ~0.
+    pytest's top-ranked files flipped from `testing/test_*.py` to the
+    `src/_pytest/*` core modules.
 - Extraction now drops Rust inline test scaffolding: symbols (and their
   spurious import/call graph edges) inside `#[cfg(test)]` / `mod tests`
   modules are suppressed via tree-sitter node navigation — test fns, helpers,

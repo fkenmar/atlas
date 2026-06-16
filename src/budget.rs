@@ -120,6 +120,11 @@ pub struct BudgetedFile {
     /// Resolved + display imports (raw import strings, deduped, sorted).
     pub imports: Vec<String>,
     pub symbols: Vec<RenderedSymbol>,
+    /// Ladder rung 3 (per-file): the full block didn't fit, so render only a
+    /// one-line summary (`## path (#rank, N symbols)`) — keeps a too-large
+    /// top-ranked file from blanking out the whole map. `symbols` is retained
+    /// for the count.
+    pub one_line: bool,
 }
 
 pub struct RenderedSymbol {
@@ -201,9 +206,12 @@ pub fn pack<T: Tokenizer>(
         }
     }
 
-    // Rung 3: at the most compact detail, greedily include by rank; every file
-    // not included collapses into the directory-skeleton footer (none lost).
-    // Re-render on each candidate so the count stays exact.
+    // Rung 3: at the most compact detail, greedily include by rank. Each file
+    // is tried at its full block, then — if that overflows — as a one-line
+    // summary, so a single huge top-ranked file can't blank out the whole map
+    // (the pytest failure mode). Anything that doesn't fit even as one line
+    // collapses into the directory-skeleton footer (none lost). Re-render on
+    // each candidate so the count stays exact.
     let detail = Detail::NoParams;
     let mut shown = vec![false; files.len()];
     let mut included: Vec<BudgetedFile> = Vec::new();
@@ -212,21 +220,31 @@ pub fn pack<T: Tokenizer>(
         if file.symbols.is_empty() && file.imports.is_empty() {
             continue; // empty → collapsed via the complement below
         }
-        let mut trial_shown = shown.clone();
-        trial_shown[fi] = true;
-        let mut trial = clone_files(&included);
-        trial.push(clone_file(&file));
-        let map = BudgetedMap {
-            detail,
-            files: trial,
-            collapsed: collapse_complement(&order, &trial_shown, files),
-            ..clone_base(&base)
-        };
-        if measure(&map, counter) <= opts.budget_tokens {
-            shown[fi] = true;
-            included.push(file);
-        } else {
-            break; // this file and every lower-ranked one collapse
+        let mut placed = false;
+        for one_line in [false, true] {
+            let mut candidate = clone_file(&file);
+            candidate.one_line = one_line;
+            let mut trial_shown = shown.clone();
+            trial_shown[fi] = true;
+            let mut trial = clone_files(&included);
+            trial.push(clone_file(&candidate));
+            let map = BudgetedMap {
+                detail,
+                files: trial,
+                collapsed: collapse_complement(&order, &trial_shown, files),
+                ..clone_base(&base)
+            };
+            if measure(&map, counter) <= opts.budget_tokens {
+                shown[fi] = true;
+                included.push(candidate);
+                placed = true;
+                break;
+            }
+        }
+        if !placed {
+            // Even a ~one-line entry overflows → the budget is full; this file
+            // and every lower-ranked one fall to the footer.
+            break;
         }
     }
     let map = BudgetedMap {
@@ -252,9 +270,16 @@ fn finalize(mut map: BudgetedMap, tokens: usize) -> BudgetedMap {
     map
 }
 
-/// File score = its File-node PageRank + the sum of its symbols' scores, so a
-/// file with widely-referenced symbols ranks high even if rarely imported.
+/// File score = its File-node PageRank (import importance) + the sum of its
+/// symbols' *earned* rank — each symbol's score above the uniform teleport
+/// baseline. Subtracting the baseline is what keeps a file from ranking high
+/// on symbol COUNT alone: a 200-test-function file whose symbols are never
+/// referenced contributes ~0 and stays where its (low) import rank puts it,
+/// while a file with a few widely-referenced symbols rises. Without this, raw
+/// symbol count dominated and test files swamped the core API.
 fn file_scores(files: &[(SourceFile, ParsedFile)], graph: &Graph, ranking: &Ranking) -> Vec<f64> {
+    let n = graph.nodes.len();
+    let baseline = if n > 0 { 1.0 / n as f64 } else { 0.0 };
     let mut scores = vec![0.0f64; files.len()];
     for (i, score) in scores.iter_mut().enumerate() {
         *score = ranking.score(i); // File node i
@@ -262,7 +287,7 @@ fn file_scores(files: &[(SourceFile, ParsedFile)], graph: &Graph, ranking: &Rank
     for (idx, node) in graph.nodes.iter().enumerate() {
         if node.kind == NodeKind::Symbol {
             if let Some(s) = scores.get_mut(node.file) {
-                *s += ranking.score(idx);
+                *s += (ranking.score(idx) - baseline).max(0.0);
             }
         }
     }
@@ -315,6 +340,7 @@ fn build_file(
         imported_by: imported_by[fi],
         imports: parsed.imports.clone(),
         symbols,
+        one_line: false,
     }
 }
 
@@ -468,6 +494,7 @@ fn clone_file(f: &BudgetedFile) -> BudgetedFile {
                 visibility: s.visibility,
             })
             .collect(),
+        one_line: f.one_line,
     }
 }
 
@@ -648,6 +675,46 @@ mod tests {
             20,
             "every file is either shown or in the skeleton footer (none lost)"
         );
+    }
+
+    #[test]
+    fn huge_top_file_becomes_one_line_not_empty_map() {
+        // Regression for the pytest failure mode: one enormous top-ranked file
+        // whose full block exceeds the budget must collapse to a one-line
+        // summary, NOT blank out the map — the smaller files still show.
+        let big: Vec<Symbol> = (0..60)
+            .map(|i| {
+                sym(
+                    &format!("big_fn_{i}"),
+                    Visibility::Public,
+                    &format!("def big_fn_{i}(a: int, b: int, c: int) -> int"),
+                )
+            })
+            .collect();
+        let mut files = vec![pfile("huge.py", big)];
+        for i in 0..5 {
+            files.push(pfile(
+                &format!("small{i}.py"),
+                vec![sym("s", Visibility::Public, "def s() -> int")],
+            ));
+        }
+        let g = graph_of(&files);
+        let r = crate::rank::rank(&g, &[]);
+        let opts = BudgetOptions {
+            budget_tokens: 80, // too small for huge.py's full block
+            no_private: false,
+        };
+        let map = pack(&files, &g, &r, "demo", stats(6), &opts, &WordCounter);
+        assert!(
+            !map.files.is_empty(),
+            "map must not be empty when smaller files fit"
+        );
+        assert!(
+            map.files.iter().any(|f| f.one_line),
+            "the huge top file should collapse to a one-line summary"
+        );
+        let collapsed: usize = map.collapsed.iter().map(|c| c.count).sum();
+        assert_eq!(map.files.len() + collapsed, 6, "none lost");
     }
 
     #[test]

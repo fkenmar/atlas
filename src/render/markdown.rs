@@ -37,6 +37,18 @@ pub fn render(map: &BudgetedMap) -> String {
 
     for file in &map.files {
         out.push('\n');
+        // Rung-3 one-line summary: a file too large to show in full still earns
+        // a single line recording its existence and symbol count.
+        if file.one_line {
+            let _ = writeln!(
+                out,
+                "## {} (#{}, {} symbol(s) — collapsed to fit)",
+                file.rel,
+                file.rank,
+                file.symbols.len()
+            );
+            continue;
+        }
         if file.imported_by > 0 {
             let _ = writeln!(
                 out,
