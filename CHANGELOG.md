@@ -9,6 +9,15 @@ benchmark delta.
 ## [Unreleased]
 
 ### Changed
+- Symbol visibility is now language-aware instead of Python-underscore-only:
+  Rust items are public iff declared `pub`/`pub(crate)` (bare fns, non-exported
+  helpers, and non-`#[macro_export]` macros are correctly private); TypeScript
+  members are private under a `private`/`protected` modifier. This makes the
+  ladder's drop-private rung and `--no-private` actually work for Rust/TS
+  (previously every symbol read as public). Known limitation: Rust trait
+  methods carry no `pub` keyword so they read as private — documented, only
+  bites under a tight budget. (No effect on the pytest benchmark — Python
+  visibility is unchanged.)
 - Budget rung 3 + ranking, both found by dogfooding the map on pytest (92k LOC):
   - **One-line rung:** a file whose full block overflows the remaining budget
     now collapses to a one-line summary (`## path (#rank, N symbols)`) instead

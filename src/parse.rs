@@ -203,16 +203,13 @@ pub fn parse_file(file: &SourceFile) -> Option<ParsedFile> {
                     .get(name_row)
                     .map(|l| l.trim().to_string())
                     .unwrap_or_default();
+                let visibility = visibility_of(file.lang, &signature, name);
                 let symbol = Symbol {
                     name: name.to_string(),
                     kind,
                     signature,
                     line: name_row + 1,
-                    visibility: if name.starts_with('_') {
-                        Visibility::Private
-                    } else {
-                        Visibility::Public
-                    },
+                    visibility,
                 };
                 symbols
                     .entry((name_row, name.to_string()))
@@ -312,6 +309,49 @@ fn is_test_module(module: tree_sitter::Node, source: &[u8]) -> bool {
     false
 }
 
+/// Decide a declaration's visibility from its source signature, per language.
+/// Visibility drives the budget ladder's first rung (drop private) and the
+/// `--no-private` flag, so it must reflect each language's real rule, not just
+/// Python's leading-underscore convention.
+///
+/// - Python: leading `_` is the private convention.
+/// - Rust: an item is public iff its declaration starts with `pub`
+///   (`pub`, `pub(crate)`, …). Trait method signatures carry no `pub` keyword
+///   (they're as visible as the trait), so they read as private here — a known
+///   over-restriction, acceptable since it only bites under a tight budget.
+/// - TypeScript: a member is private iff a `private`/`protected` modifier
+///   precedes its name; everything else (exports, public members, plain
+///   top-level declarations) reads as public.
+fn visibility_of(lang: Language, signature: &str, name: &str) -> Visibility {
+    match lang {
+        Language::Python => {
+            if name.starts_with('_') {
+                Visibility::Private
+            } else {
+                Visibility::Public
+            }
+        }
+        Language::Rust => {
+            if signature.trim_start().starts_with("pub") {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            }
+        }
+        Language::TypeScript => {
+            let before_name = signature.split(name).next().unwrap_or("");
+            if before_name
+                .split_whitespace()
+                .any(|w| w == "private" || w == "protected")
+            {
+                Visibility::Private
+            } else {
+                Visibility::Public
+            }
+        }
+    }
+}
+
 /// UPPER_SNAKE check for the module-level-assignment constant rule.
 fn is_const_name(name: &str) -> bool {
     !name.is_empty()
@@ -361,6 +401,54 @@ mod tests {
         assert!(!super::is_const_name("api_version"));
         assert!(!super::is_const_name("_private"));
         assert!(!super::is_const_name(""));
+    }
+
+    #[test]
+    fn visibility_is_language_aware() {
+        use super::{visibility_of, Visibility};
+        // Rust: `pub`-prefixed is public, bare is private.
+        assert_eq!(
+            visibility_of(Language::Rust, "pub fn f()", "f"),
+            Visibility::Public
+        );
+        assert_eq!(
+            visibility_of(Language::Rust, "pub(crate) fn f()", "f"),
+            Visibility::Public
+        );
+        assert_eq!(
+            visibility_of(Language::Rust, "fn f()", "f"),
+            Visibility::Private
+        );
+        // Python: leading underscore.
+        assert_eq!(
+            visibility_of(Language::Python, "def _f()", "_f"),
+            Visibility::Private
+        );
+        assert_eq!(
+            visibility_of(Language::Python, "def f()", "f"),
+            Visibility::Public
+        );
+        // TypeScript: private/protected member modifiers.
+        assert_eq!(
+            visibility_of(
+                Language::TypeScript,
+                "private helperMethod(): void",
+                "helperMethod"
+            ),
+            Visibility::Private
+        );
+        assert_eq!(
+            visibility_of(Language::TypeScript, "protected x(): void", "x"),
+            Visibility::Private
+        );
+        assert_eq!(
+            visibility_of(Language::TypeScript, "export function foo()", "foo"),
+            Visibility::Public
+        );
+        assert_eq!(
+            visibility_of(Language::TypeScript, "run(): void", "run"),
+            Visibility::Public
+        );
     }
 
     fn ranges(source: &str) -> Vec<(usize, usize)> {

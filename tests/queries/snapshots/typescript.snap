@@ -9,7 +9,7 @@ L21  TypeAlias Public  Format          :: export type Format = "md" | "json" | "
 L23  Enum      Public  Level           :: export enum Level {
 L28  Class     Public  Service         :: export class Service {
 L29  Method    Public  run             :: run(): void {
-L33  Method    Public  helperMethod    :: private helperMethod(): void {
+L33  Method    Private helperMethod    :: private helperMethod(): void {
 L39  Function  Public  overloaded      :: export function overloaded(x: number): number;
 L40  Function  Public  overloaded      :: export function overloaded(x: string): string;
 L41  Function  Public  overloaded      :: export function overloaded(x: number | string): number | string {
