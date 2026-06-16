@@ -9,6 +9,11 @@ benchmark delta.
 ## [Unreleased]
 
 ### Added
+- M1 CLI integration: clap (derive) drives the full pipeline end-to-end —
+  `repomap [PATH] --budget N --focus PATH... --lang csv --no-private`. discover
+  → parse → link → rank (with `--focus` paths mapped to PageRank seeds) →
+  budget → Markdown. repomap now compiles its own 2,473-LOC source into a
+  2,036-token budgeted map. `--format` accepts `md` (json/xml are later rungs).
 - M1 budget stage (FR-3, FR-11) + budgeted Markdown renderer (FR-5, md): greedy
   packing into a token budget (default 2,048) with exact BPE counts from
   tiktoken-rs `cl100k_base`, behind a pluggable `Tokenizer` trait. Degradation
