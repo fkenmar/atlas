@@ -9,6 +9,15 @@ benchmark delta.
 ## [Unreleased]
 
 ### Changed
+- **Imports show resolved internal dependencies, not raw import strings.** The
+  import line was 27.5% of the map and dominated by stdlib/external noise
+  (`std::collections`, `node:path`). It now lists only the repo-relative paths
+  of the in-repo files each file actually depends on (the link graph's
+  File→File edges) — e.g. `imports: parse.rs, lang/mod.rs`. On repomap's own
+  source the import lines fell 1,090 → 283 chars (−74%), and the freed budget
+  lifted the map from degraded "public-only" to full detail. The external/
+  stdlib deps that drop out remain inferable from the symbol signatures; the
+  in-repo dependency structure (the navigational signal) is now clearer.
 - **Adaptive skeleton footer** — the biggest density win so far. A
   full-granularity collapsed-file footer dominated the budget on large repos
   (pytest: 58 directory groups, ~32% of the whole map). The footer now coarsens

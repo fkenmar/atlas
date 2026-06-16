@@ -168,6 +168,7 @@ pub fn pack<T: Tokenizer>(
     let scores = file_scores(files, graph, ranking);
     let sym_scores = per_symbol_scores(files, graph, ranking);
     let imported_by = file_import_indegree(files.len(), graph);
+    let imports = resolved_imports(files, graph);
 
     // Files in rank order (score desc, path asc — deterministic).
     let mut order: Vec<usize> = (0..files.len()).collect();
@@ -206,6 +207,7 @@ pub fn pack<T: Tokenizer>(
                 &scores,
                 &sym_scores[fi],
                 &imported_by,
+                &imports[fi],
                 rank + 1,
                 detail,
                 None,
@@ -245,6 +247,7 @@ pub fn pack<T: Tokenizer>(
             &scores,
             &sym_scores[fi],
             &imported_by,
+            &imports[fi],
             rank + 1,
             detail,
             None,
@@ -258,6 +261,7 @@ pub fn pack<T: Tokenizer>(
             &scores,
             &sym_scores[fi],
             &imported_by,
+            &imports[fi],
             rank + 1,
             detail,
             Some(PARTIAL_SYMBOLS),
@@ -367,6 +371,30 @@ fn per_symbol_scores(
     out
 }
 
+/// Resolved internal imports per file: the repo-relative paths of the files
+/// each file actually depends on (File→File edges from the link graph). This
+/// replaces the raw import strings in the map, which were dominated by
+/// stdlib/external noise (`std::collections`, `node:path`, …) that costs tokens
+/// without aiding navigation — the in-repo dependency structure is the signal.
+fn resolved_imports(files: &[(SourceFile, ParsedFile)], graph: &Graph) -> Vec<Vec<String>> {
+    let num_files = files.len();
+    let mut out: Vec<Vec<String>> = vec![Vec::new(); num_files];
+    for (fi, adj) in graph.edges.iter().enumerate().take(num_files) {
+        for &target in adj {
+            if let Some(node) = graph.nodes.get(target) {
+                if node.kind == NodeKind::File {
+                    out[fi].push(node.label.clone());
+                }
+            }
+        }
+    }
+    for deps in &mut out {
+        deps.sort();
+        deps.dedup();
+    }
+    out
+}
+
 /// Import in-degree of each File node (“imported by N files”).
 fn file_import_indegree(num_files: usize, graph: &Graph) -> Vec<usize> {
     let mut indeg = vec![0usize; num_files];
@@ -389,6 +417,7 @@ fn build_file(
     scores: &[f64],
     symbol_scores: &[f64],
     imported_by: &[usize],
+    resolved_imports: &[String],
     rank: usize,
     detail: Detail,
     max_symbols: Option<usize>,
@@ -440,7 +469,7 @@ fn build_file(
         rank,
         score: scores[fi],
         imported_by: imported_by[fi],
-        imports: parsed.imports.iter().map(|i| tidy_import(i)).collect(),
+        imports: resolved_imports.to_vec(),
         symbols,
         one_line: false,
         omitted,
@@ -533,18 +562,6 @@ fn tidy_signature(sig: &str) -> String {
         .trim_end_matches(['{', ':', ';'])
         .trim_end()
         .to_string()
-}
-
-/// Compress an import for display: drop the `use `/`pub use ` keyword, the
-/// trailing `;`, and surrounding quotes, keeping the dependency path itself.
-/// `use crate::link::Graph;` → `crate::link::Graph`; `"./util"` → `./util`.
-fn tidy_import(import: &str) -> String {
-    let s = import.trim();
-    let s = match s.find("use ") {
-        Some(i) => s[i + 4..].trim(),
-        None => s,
-    };
-    s.trim_end_matches(';').trim().trim_matches('"').to_string()
 }
 
 /// Strip parameter *names* from a signature, keeping the types (ladder rung
@@ -706,6 +723,14 @@ mod tests {
     }
 
     fn pfile(rel: &str, symbols: Vec<Symbol>) -> (SourceFile, ParsedFile) {
+        pfile_imports(rel, symbols, &[])
+    }
+
+    fn pfile_imports(
+        rel: &str,
+        symbols: Vec<Symbol>,
+        imports: &[&str],
+    ) -> (SourceFile, ParsedFile) {
         (
             SourceFile {
                 path: std::path::PathBuf::from(rel),
@@ -714,7 +739,7 @@ mod tests {
             },
             ParsedFile {
                 symbols,
-                imports: Vec::new(),
+                imports: imports.iter().map(|s| s.to_string()).collect(),
                 references: Vec::new(),
                 lines: 10,
             },
@@ -743,7 +768,7 @@ mod tests {
     }
 
     #[test]
-    fn tidy_compression_is_lossless() {
+    fn tidy_signature_is_lossless() {
         // Trailing syntactic noise dropped, the declaration kept intact.
         assert_eq!(tidy_signature("class Service {"), "class Service");
         assert_eq!(
@@ -755,11 +780,37 @@ mod tests {
             tidy_signature("pub const X: u32 = 5;"),
             "pub const X: u32 = 5"
         );
-        // Import keyword/punctuation/quotes dropped, dependency path kept.
-        assert_eq!(tidy_import("use crate::link::Graph;"), "crate::link::Graph");
-        assert_eq!(tidy_import("pub use crate::x;"), "crate::x");
-        assert_eq!(tidy_import("\"./util\""), "./util");
-        assert_eq!(tidy_import("os"), "os");
+    }
+
+    #[test]
+    fn imports_show_resolved_internal_deps_only() {
+        // a.py imports b.py (in-repo) and `os` (stdlib). The map's import line
+        // lists only the resolved in-repo dependency, not the stdlib noise.
+        let files = vec![
+            pfile_imports(
+                "a.py",
+                vec![sym("f", Visibility::Public, "def f()")],
+                &["b", "os"],
+            ),
+            pfile("b.py", vec![sym("g", Visibility::Public, "def g()")]),
+        ];
+        let g = graph_of(&files);
+        let r = crate::rank::rank(&g, &[]);
+        let opts = BudgetOptions {
+            budget_tokens: 10_000,
+            no_private: false,
+        };
+        let map = pack(&files, &g, &r, "demo", stats(2), &opts, &WordCounter);
+        let a = map
+            .files
+            .iter()
+            .find(|f| f.rel == "a.py")
+            .expect("a.py shown");
+        assert_eq!(
+            a.imports,
+            vec!["b.py".to_string()],
+            "only the in-repo dep, no stdlib"
+        );
     }
 
     #[test]
