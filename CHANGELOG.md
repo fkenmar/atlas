@@ -9,6 +9,14 @@ benchmark delta.
 ## [Unreleased]
 
 ### Added
+- M1 rank stage (FR-4): personalized PageRank over the link graph — in-house
+  power iteration (damping 0.85, ≤20 iterations, L1 convergence check per
+  PRD §7.2). Dangling Symbol-node mass is redistributed through the teleport
+  vector each step so scores stay a distribution summing to 1; `--focus` node
+  indices seed the personalization vector. Deterministic (node-index-order
+  arithmetic). Property tests cover the distribution invariant, that
+  referenced symbols outrank unreferenced ones, focus boosting, and
+  determinism.
 - M1 link stage (ADR-0002): best-effort syntactic import/reference graph —
   File nodes (index-aligned to the file list) plus Symbol nodes, with import
   edges (File→File) and reference edges (File→callee Symbol), sorted and
