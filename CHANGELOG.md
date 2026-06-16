@@ -9,6 +9,13 @@ benchmark delta.
 ## [Unreleased]
 
 ### Changed
+- **Lossless signature/import compression**: trailing syntactic noise carried
+  in from the source line — an opening `{`, a Python/trait `:`/`;` — and import
+  boilerplate (`use `, `;`, quotes) are dropped, keeping the declaration and
+  dependency path intact. Same information, fewer tokens: repomap's own Rust
+  self-map fell from 1,443 → 1,257 tokens (−13%) at budget 2,048, and a
+  budget-filling map spends the freed space surfacing more real API. A pure
+  step toward the token-reduction goal.
 - Budget rung 3 gained a **partial-file rung**: when a file's full block won't
   fit, it now shows its top-K highest-PageRank symbols (default 8) plus a
   "… (N more symbols)" note, instead of collapsing straight to a one-line count.

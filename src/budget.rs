@@ -420,14 +420,15 @@ fn build_file(
         .iter()
         .map(|&i| {
             let s = &parsed.symbols[i];
+            let sig = if detail.strips_params() {
+                strip_param_names(&s.signature)
+            } else {
+                s.signature.clone()
+            };
             RenderedSymbol {
                 kind: s.kind,
                 name: s.name.clone(),
-                signature: if detail.strips_params() {
-                    strip_param_names(&s.signature)
-                } else {
-                    s.signature.clone()
-                },
+                signature: tidy_signature(&sig),
                 visibility: s.visibility,
                 line: s.line,
             }
@@ -439,7 +440,7 @@ fn build_file(
         rank,
         score: scores[fi],
         imported_by: imported_by[fi],
-        imports: parsed.imports.clone(),
+        imports: parsed.imports.iter().map(|i| tidy_import(i)).collect(),
         symbols,
         one_line: false,
         omitted,
@@ -475,6 +476,30 @@ fn collapse_dirs(indices: &[usize], files: &[(SourceFile, ParsedFile)]) -> Vec<C
         .into_iter()
         .map(|(dir, count)| CollapsedDir { dir, count })
         .collect()
+}
+
+/// Drop trailing syntactic noise carried in from the source line — an opening
+/// brace, or a Python/trait trailing `:` / `;` — that costs tokens without
+/// adding information. Lossless: `class Service {` → `class Service`,
+/// `def run() -> None:` → `def run() -> None`, `fn ready(&self);` →
+/// `fn ready(&self)`.
+fn tidy_signature(sig: &str) -> String {
+    sig.trim_end()
+        .trim_end_matches(['{', ':', ';'])
+        .trim_end()
+        .to_string()
+}
+
+/// Compress an import for display: drop the `use `/`pub use ` keyword, the
+/// trailing `;`, and surrounding quotes, keeping the dependency path itself.
+/// `use crate::link::Graph;` → `crate::link::Graph`; `"./util"` → `./util`.
+fn tidy_import(import: &str) -> String {
+    let s = import.trim();
+    let s = match s.find("use ") {
+        Some(i) => s[i + 4..].trim(),
+        None => s,
+    };
+    s.trim_end_matches(';').trim().trim_matches('"').to_string()
 }
 
 /// Strip parameter *names* from a signature, keeping the types (ladder rung
@@ -670,6 +695,26 @@ mod tests {
         // cl100k_base: "hello" + " world" = 2 tokens.
         assert_eq!(c.count("hello world"), 2);
         assert!(c.count("def authenticate(email: str) -> Session") > 0);
+    }
+
+    #[test]
+    fn tidy_compression_is_lossless() {
+        // Trailing syntactic noise dropped, the declaration kept intact.
+        assert_eq!(tidy_signature("class Service {"), "class Service");
+        assert_eq!(
+            tidy_signature("def run(self) -> None:"),
+            "def run(self) -> None"
+        );
+        assert_eq!(tidy_signature("fn ready(&self);"), "fn ready(&self)");
+        assert_eq!(
+            tidy_signature("pub const X: u32 = 5;"),
+            "pub const X: u32 = 5"
+        );
+        // Import keyword/punctuation/quotes dropped, dependency path kept.
+        assert_eq!(tidy_import("use crate::link::Graph;"), "crate::link::Graph");
+        assert_eq!(tidy_import("pub use crate::x;"), "crate::x");
+        assert_eq!(tidy_import("\"./util\""), "./util");
+        assert_eq!(tidy_import("os"), "os");
     }
 
     #[test]
