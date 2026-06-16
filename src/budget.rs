@@ -125,6 +125,9 @@ pub struct BudgetedFile {
     pub imported_by: usize,
     /// Resolved + display imports (raw import strings, deduped, sorted).
     pub imports: Vec<String>,
+    /// Reverse dependencies — files that import this one ("used by"), capped.
+    /// The edit sites for a change to this file's API.
+    pub used_by: Vec<String>,
     pub symbols: Vec<RenderedSymbol>,
     /// Ladder rung 3 (per-file): the full block didn't fit, so render only a
     /// one-line summary (`## path (#rank, N symbols)`) — keeps a too-large
@@ -169,6 +172,7 @@ pub fn pack<T: Tokenizer>(
     let sym_scores = per_symbol_scores(files, graph, ranking);
     let imported_by = file_import_indegree(files.len(), graph);
     let imports = resolved_imports(files, graph);
+    let used_by = reverse_imports(files, graph);
 
     // Files in rank order (score desc, path asc — deterministic).
     let mut order: Vec<usize> = (0..files.len()).collect();
@@ -208,6 +212,7 @@ pub fn pack<T: Tokenizer>(
                 &sym_scores[fi],
                 &imported_by,
                 &imports[fi],
+                &used_by[fi],
                 rank + 1,
                 detail,
                 None,
@@ -248,6 +253,7 @@ pub fn pack<T: Tokenizer>(
             &sym_scores[fi],
             &imported_by,
             &imports[fi],
+            &used_by[fi],
             rank + 1,
             detail,
             None,
@@ -262,6 +268,7 @@ pub fn pack<T: Tokenizer>(
             &sym_scores[fi],
             &imported_by,
             &imports[fi],
+            &used_by[fi],
             rank + 1,
             detail,
             Some(PARTIAL_SYMBOLS),
@@ -395,6 +402,35 @@ fn resolved_imports(files: &[(SourceFile, ParsedFile)], graph: &Graph) -> Vec<Ve
     out
 }
 
+/// How many top-ranked "used by" (reverse-dependency) files to list per file
+/// before truncating; the header's `imported_by` count still gives the total.
+const USED_BY_CAP: usize = 8;
+
+/// Reverse-dependency edges: for each file, the repo-relative paths of the
+/// files that import it ("used by"). To change a symbol you must visit
+/// everything that uses it, so this is the signal a multi-site edit needs and
+/// the benchmark flagged as missing. Mirrors [`resolved_imports`] with the
+/// edge reversed; sorted + deduped.
+fn reverse_imports(files: &[(SourceFile, ParsedFile)], graph: &Graph) -> Vec<Vec<String>> {
+    let num_files = files.len();
+    let mut out: Vec<Vec<String>> = vec![Vec::new(); num_files];
+    for (importer, adj) in graph.edges.iter().enumerate().take(num_files) {
+        for &target in adj {
+            if let Some(node) = graph.nodes.get(target) {
+                if node.kind == NodeKind::File {
+                    out[node.file].push(files[importer].0.rel.clone());
+                }
+            }
+        }
+    }
+    for deps in &mut out {
+        deps.sort();
+        deps.dedup();
+        deps.truncate(USED_BY_CAP);
+    }
+    out
+}
+
 /// Import in-degree of each File node (“imported by N files”).
 fn file_import_indegree(num_files: usize, graph: &Graph) -> Vec<usize> {
     let mut indeg = vec![0usize; num_files];
@@ -418,6 +454,7 @@ fn build_file(
     symbol_scores: &[f64],
     imported_by: &[usize],
     resolved_imports: &[String],
+    used_by: &[String],
     rank: usize,
     detail: Detail,
     max_symbols: Option<usize>,
@@ -470,6 +507,7 @@ fn build_file(
         score: scores[fi],
         imported_by: imported_by[fi],
         imports: resolved_imports.to_vec(),
+        used_by: used_by.to_vec(),
         symbols,
         one_line: false,
         omitted,
@@ -678,6 +716,7 @@ fn clone_file(f: &BudgetedFile) -> BudgetedFile {
         score: f.score,
         imported_by: f.imported_by,
         imports: f.imports.clone(),
+        used_by: f.used_by.clone(),
         symbols: f
             .symbols
             .iter()

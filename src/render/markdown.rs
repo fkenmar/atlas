@@ -73,6 +73,10 @@ pub fn render(map: &BudgetedMap) -> String {
         if !file.imports.is_empty() {
             let _ = writeln!(out, "imports: {}", file.imports.join(", "));
         }
+        // Reverse deps — the edit sites for a change to this file's API.
+        if !file.used_by.is_empty() {
+            let _ = writeln!(out, "used by: {}", file.used_by.join(", "));
+        }
     }
 
     // Directory-skeleton footer: low-rank files dropped to fit, never silently

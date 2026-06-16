@@ -71,6 +71,13 @@ benchmark delta.
   freed enough budget to show the entire real API at full signature fidelity.
 
 ### Added
+- **Reverse-dependency ("used by") edges** — each file now lists the files
+  that import it (`used by: a.rs, b.rs`, capped at 8; the header `imported_by`
+  count gives the total). This is the signal a *multi-site edit* needs — to
+  change a file's API you must visit everything that uses it — which the
+  benchmark flagged as missing on multi-site tasks (the map's weakest case).
+  In both the Markdown and JSON output. Whether it nets out (navigation value
+  vs. added per-turn cost) is for the benchmark to judge on the next run.
 - **Class fields are now extracted (Python)** — PRD §5.3 shows fields in the
   map (`class User # fields: id, email, …`), but classes were rendered without
   them. Annotated class-body attributes (dataclass/attrs fields, typed class

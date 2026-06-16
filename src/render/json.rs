@@ -64,8 +64,9 @@ pub fn render(map: &BudgetedMap) -> String {
 fn render_file(file: &BudgetedFile) -> String {
     let symbols: Vec<String> = file.symbols.iter().map(render_symbol).collect();
     let imports: Vec<String> = file.imports.iter().map(|i| json_str(i)).collect();
+    let used_by: Vec<String> = file.used_by.iter().map(|i| json_str(i)).collect();
     format!(
-        "{{\"path\": {}, \"lang\": {}, \"rank\": {}, \"score\": {:.6}, \"imported_by\": {}, \"one_line\": {}, \"omitted\": {}, \"symbols\": [{}], \"imports\": [{}]}}",
+        "{{\"path\": {}, \"lang\": {}, \"rank\": {}, \"score\": {:.6}, \"imported_by\": {}, \"one_line\": {}, \"omitted\": {}, \"symbols\": [{}], \"imports\": [{}], \"used_by\": [{}]}}",
         json_str(&file.rel),
         json_str(file.lang),
         file.rank,
@@ -75,6 +76,7 @@ fn render_file(file: &BudgetedFile) -> String {
         file.omitted,
         symbols.join(", "),
         imports.join(", "),
+        used_by.join(", "),
     )
 }
 
@@ -177,6 +179,7 @@ mod tests {
                 score: 0.0410,
                 imported_by: 3,
                 imports: vec!["src/db.py".to_string()],
+                used_by: vec!["src/api.py".to_string()],
                 symbols: vec![RenderedSymbol {
                     kind: SymbolKind::Method,
                     name: "login".to_string(),
