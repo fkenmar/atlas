@@ -13,6 +13,14 @@ Also emitted, for context and back-compat: `total_tokens` (same sum across the
 whole session — the old metric), `turns_to_first_edit`, `num_turns`,
 `cost_usd`, and `edited` (false if the agent never edited — then exploration
 equals total).
+
+Exits nonzero (printing nothing on stdout) when the stream is malformed or
+empty — no `result` event or no observed usage — so a crashed `claude` or a
+format change cannot masquerade as a perfect zero-token run; the caller then
+records the run as null/failed rather than 0. NOTE: this counts the first
+edit, not the first *correct* edit (PRD §8), so the caller must take medians
+over passing runs only — a run that edits early but fails is not a valid
+exploration sample.
 """
 import json
 import sys
@@ -39,6 +47,7 @@ def main():
     first_edit_seen = False
     cost_usd = None
     num_turns = None
+    saw_result = False
 
     for line in sys.stdin:
         line = line.strip()
@@ -66,8 +75,20 @@ def main():
                         turns_to_first_edit = turn
                         break
         elif etype == "result":
+            saw_result = True
             cost_usd = ev.get("total_cost_usd")
             num_turns = ev.get("num_turns")
+
+    # Reject a malformed / failed / empty session rather than reporting a
+    # misleading 0 — a crashed `claude`, a format change, or an empty stream
+    # must NOT look like a perfect zero-token run. The caller records null.
+    if not saw_result or total <= 0 or turn == 0:
+        sys.stderr.write(
+            "metric.py: no result event or no observed usage "
+            f"(saw_result={saw_result}, turns={turn}, total_tokens={total}) "
+            "— treating as a failed session\n"
+        )
+        sys.exit(1)
 
     if not first_edit_seen:
         # The agent never edited — its whole session was exploration.

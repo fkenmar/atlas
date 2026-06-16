@@ -30,8 +30,9 @@ The **old M0 proxy** was total input-side tokens across the *whole* session plus
 ## Protocol
 
 - **3 runs minimum per arm per task; the MEDIAN is the reported number.** Never a single run, never the mean.
-- Report variance; >15% spread between repeats makes the comparison suspect — investigate before concluding.
-- Compare like with like: same model, same pinned repo rev, same task set. Changing any of those means re-recording the baseline, not comparing across it.
+- **Medians are over passing runs only.** A run that edited early but failed its success criterion is not a valid exploration sample (the first edit was wrong), and counting it would bias exploration tokens downward. Every run — pass or fail — is kept in the `per_run` array for diagnostics; a failed/malformed session is recorded `null`, never `0`.
+- Report variance; >15% spread between passing repeats makes the comparison suspect — investigate before concluding.
+- Compare like with like: same model, same pinned repo rev, same task set, **and the same metric generation** (results `schema_version` / `metric` must match the baseline's — the exploration metric is not comparable to the old whole-session proxy). Changing any of those means re-recording the baseline, not comparing across it.
 - Local results go to `results/run-<stamp>.local.json` (gitignored); the recorded no-map baseline lives in `baseline.json`.
 
 ## Files

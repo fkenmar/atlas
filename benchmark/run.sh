@@ -100,11 +100,14 @@ for t in "${tasks[@]}"; do
 
   arm_objects=()
   for arm in $BENCH_ARMS; do
-    tokens_list=""
-    total_tokens_list=""
-    turns_list=""
-    first_edit_list=""
-    cost_list=""
+    # Median lists hold PASSING runs only (a failed run is not a valid
+    # exploration sample); per_run_json keeps every run for diagnostics.
+    mtok=""
+    mtotal=""
+    mturns=""
+    mfedit=""
+    mcost=""
+    per_run_json=""
     pass_count=0
     for run_idx in $(seq 1 "$BENCH_RUNS"); do
       workdir=".work/run-${id}-${arm}-${run_idx}"
@@ -139,6 +142,7 @@ for t in "${tasks[@]}"; do
       # across arms, and the agent can't make network calls or run code.
       # stream-json gives the per-turn message + tool-use breakdown the
       # exploration metric needs (metric.py).
+      claude_status=0
       (
         cd "$workdir"
         env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT claude -p \
@@ -147,55 +151,71 @@ for t in "${tasks[@]}"; do
           --max-turns "$BENCH_MAX_TURNS" \
           --permission-mode acceptEdits \
           < "$prompt_file"
-      ) > "$session_jsonl" 2>"${workdir}/.session.err" || true
+      ) > "$session_jsonl" 2>"${workdir}/.session.err" || claude_status=$?
 
-      # Refined metric (M1): exploration_tokens = input-side tokens processed
-      # up to and including the agent's first edit (benchmark/metric.py),
-      # isolating the exploration the map shrinks. The old whole-session total
-      # is kept as total_tokens for comparison; both come from the same stream.
-      metrics="$(python3 metric.py < "$session_jsonl" 2>/dev/null || echo '{}')"
-      tokens="$(printf '%s' "$metrics" | jq -r '.exploration_tokens // null')"
-      total_tokens="$(printf '%s' "$metrics" | jq -r '.total_tokens // null')"
-      turns="$(printf '%s' "$metrics" | jq -r '.num_turns // null')"
-      first_edit_turn="$(printf '%s' "$metrics" | jq -r '.turns_to_first_edit // null')"
-      cost="$(printf '%s' "$metrics" | jq -r '.cost_usd // null')"
+      # Refined metric (M1): exploration_tokens = input-side tokens up to the
+      # agent's first edit (benchmark/metric.py). metric.py exits nonzero on a
+      # malformed/empty stream (crashed claude, format change), so such a run
+      # is recorded as null/failed — NOT a misleading zero (review finding).
+      if metrics="$(python3 metric.py < "$session_jsonl" 2>>"${workdir}/.session.err")"; then
+        tokens="$(printf '%s' "$metrics" | jq -r '.exploration_tokens')"
+        total_tokens="$(printf '%s' "$metrics" | jq -r '.total_tokens')"
+        turns="$(printf '%s' "$metrics" | jq -r '.num_turns')"
+        first_edit_turn="$(printf '%s' "$metrics" | jq -r '.turns_to_first_edit')"
+        cost="$(printf '%s' "$metrics" | jq -r '.cost_usd // null')"
+      else
+        echo "[${id}] ${arm} run ${run_idx}: FAILED session (claude exit ${claude_status}; metric.py rejected the stream) — recorded null"
+        tokens=null total_tokens=null turns=null first_edit_turn=null cost=null
+      fi
 
+      # Success criterion is authoritative for pass/fail; a null-metric run
+      # cannot pass.
       passed=false
-      if (cd "$workdir" && bash -c "$success_cmd" >/dev/null 2>&1); then
+      if [ "$tokens" != "null" ] && (cd "$workdir" && bash -c "$success_cmd" >/dev/null 2>&1); then
         passed=true
         pass_count=$((pass_count + 1))
       fi
       echo "[${id}] ${arm} run ${run_idx}: explore=${tokens} total=${total_tokens} turns=${turns} first_edit_turn=${first_edit_turn} cost=\$${cost} passed=${passed}"
 
-      [ "$tokens" != "null" ] && tokens_list="${tokens_list}${tokens}"$'\n'
-      [ "$total_tokens" != "null" ] && total_tokens_list="${total_tokens_list}${total_tokens}"$'\n'
-      [ "$turns" != "null" ] && turns_list="${turns_list}${turns}"$'\n'
-      [ "$first_edit_turn" != "null" ] && first_edit_list="${first_edit_list}${first_edit_turn}"$'\n'
-      [ "$cost" != "null" ] && cost_list="${cost_list}${cost}"$'\n'
+      # Per-run diagnostic record — EVERY run, including failures (the outliers
+      # are exactly what we want to see).
+      per_run_json="${per_run_json}$(jq -n \
+        --argjson e "$tokens" --argjson t "$total_tokens" --argjson n "$turns" \
+        --argjson f "$first_edit_turn" --argjson c "$cost" --argjson p "$passed" \
+        '{exploration_tokens:$e, total_tokens:$t, num_turns:$n, turns_to_first_edit:$f, cost_usd:$c, passed:$p}')"$'\n'
+
+      # Medians use PASSING runs only — a run that edited early but failed is
+      # not a valid exploration sample and would bias the median down.
+      if [ "$passed" = true ]; then
+        mtok="${mtok}${tokens}"$'\n'
+        mtotal="${mtotal}${total_tokens}"$'\n'
+        mturns="${mturns}${turns}"$'\n'
+        mfedit="${mfedit}${first_edit_turn}"$'\n'
+        [ "$cost" != "null" ] && mcost="${mcost}${cost}"$'\n'
+      fi
     done
 
-    median_tokens="$(printf '%s' "$tokens_list" | median_of)"
-    median_total_tokens="$(printf '%s' "$total_tokens_list" | median_of)"
-    median_turns="$(printf '%s' "$turns_list" | median_of)"
-    median_first_edit="$(printf '%s' "$first_edit_list" | median_of)"
-    median_cost="$(printf '%s' "$cost_list" | median_of)"
+    median_tokens="$(printf '%s' "$mtok" | median_of)"
+    median_total_tokens="$(printf '%s' "$mtotal" | median_of)"
+    median_turns="$(printf '%s' "$mturns" | median_of)"
+    median_first_edit="$(printf '%s' "$mfedit" | median_of)"
+    median_cost="$(printf '%s' "$mcost" | median_of)"
 
-    # Protocol: >15% token spread across runs makes the comparison suspect —
+    # Protocol: >15% spread across PASSING runs makes the comparison suspect —
     # record it instead of hiding it (benchmark/README.md).
     variance_note=null
     if [ "$median_tokens" != "null" ]; then
-      tmin="$(printf '%s' "$tokens_list" | grep -v '^$' | sort -n | head -1)"
-      tmax="$(printf '%s' "$tokens_list" | grep -v '^$' | sort -n | tail -1)"
+      tmin="$(printf '%s' "$mtok" | grep -v '^$' | sort -n | head -1)"
+      tmax="$(printf '%s' "$mtok" | grep -v '^$' | sort -n | tail -1)"
       if [ -n "$tmin" ] && [ "$median_tokens" -gt 0 ]; then
         spread_pct=$(((tmax - tmin) * 100 / median_tokens))
         if [ "$spread_pct" -gt 15 ]; then
-          variance_note="$(jq -n --arg s "token spread ${spread_pct}% of median across runs (min ${tmin}, max ${tmax}, median ${median_tokens})" '$s')"
+          variance_note="$(jq -n --arg s "exploration-token spread ${spread_pct}% of median across passing runs (min ${tmin}, max ${tmax}, median ${median_tokens})" '$s')"
         fi
       fi
     fi
 
-    per_run_tokens="$(printf '%s' "$tokens_list" | jq -s '.')"
-    per_run_turns="$(printf '%s' "$turns_list" | jq -s '.')"
+    per_run="$(printf '%s' "$per_run_json" | jq -s '.')"
     arm_objects+=("$(jq -n \
       --arg arm "$arm" \
       --argjson tokens "$median_tokens" \
@@ -205,10 +225,9 @@ for t in "${tasks[@]}"; do
       --argjson cost "$median_cost" \
       --argjson runs "$BENCH_RUNS" \
       --argjson passes "$pass_count" \
-      --argjson per_tokens "$per_run_tokens" \
-      --argjson per_turns "$per_run_turns" \
+      --argjson per_run "$per_run" \
       --argjson vnote "$variance_note" \
-      '{arm: $arm, exploration_tokens: $tokens, total_tokens: $total_tokens, turns: $turns, turns_to_first_edit: $first_edit, cost_usd: $cost, runs: $runs, passed_runs: $passes, per_run_tokens: $per_tokens, per_run_turns: $per_turns, variance_note: $vnote}')")
+      '{arm: $arm, exploration_tokens: $tokens, total_tokens: $total_tokens, turns: $turns, turns_to_first_edit: $first_edit, cost_usd: $cost, runs: $runs, passed_runs: $passes, median_over: "passing runs only", per_run: $per_run, variance_note: $vnote}')")
   done
 
   task_objects+=("$(jq -n \
@@ -231,13 +250,18 @@ echo "wrote ${out}"
 
 if [ "$record_baseline" = true ]; then
   # The ONLY sanctioned writer of baseline.json (hand edits are hook-blocked).
+  # schema_version 2 + the `metric` field: the baseline self-describes which
+  # metric generation it used, so a comparison against an incompatible-metric
+  # result can be refused (review finding). The OLD schema-1 baseline used the
+  # whole-session token proxy and is NOT comparable to these numbers.
   jq -n \
     --slurpfile schema_doc <(jq '._schema' baseline.json) \
     --arg recorded_at "$stamp" \
+    --arg metric "exploration_tokens = input-side tokens up to the first edit (metric.py); medians over passing runs only; results schema_version 3" \
     --arg environment "$(uname -ms), claude $(claude --version 2>/dev/null | head -1), model ${BENCH_MODEL}, max_turns ${BENCH_MAX_TURNS}" \
     --argjson runs "$BENCH_RUNS" \
-    --argjson tasks "$(jq '[.tasks[] | (.arms[] | select(.arm=="without_map")) as $a | {task: .task, exploration_tokens: $a.exploration_tokens, turns: $a.turns, variance_note: $a.variance_note}]' "$out")" \
-    '{_schema: $schema_doc[0], schema_version: 1, recorded_at: $recorded_at, environment: $environment, runs_per_arm: $runs, tasks: $tasks}' \
+    --argjson tasks "$(jq '[.tasks[] | (.arms[] | select(.arm=="without_map")) as $a | {task: .task, exploration_tokens: $a.exploration_tokens, total_tokens: $a.total_tokens, turns: $a.turns, turns_to_first_edit: $a.turns_to_first_edit, variance_note: $a.variance_note}]' "$out")" \
+    '{_schema: $schema_doc[0], schema_version: 2, metric: $metric, recorded_at: $recorded_at, environment: $environment, runs_per_arm: $runs, tasks: $tasks}' \
     > baseline.json.tmp && mv baseline.json.tmp baseline.json
-  echo "recorded baseline.json (without_map medians, ${BENCH_RUNS} runs/task)"
+  echo "recorded baseline.json (without_map medians over passing runs, ${BENCH_RUNS} runs/task, exploration metric)"
 fi
