@@ -31,7 +31,7 @@ pub fn render(map: &BudgetedMap) -> String {
     };
     let _ = writeln!(
         out,
-        "# repomap: {} ({} LOC, {} files) | budget {} | rendered {} tok{degraded}",
+        "# atlas: {} ({} LOC, {} files) | budget {} | rendered {} tok{degraded}",
         map.repo_name, map.total_loc, map.total_files, map.target_tokens, map.rendered_tokens
     );
 
@@ -116,7 +116,7 @@ pub fn render_naive_map(repo_name: &str, outcome: &ParseOutcome) -> String {
     let mut out = String::new();
     let _ = writeln!(
         out,
-        "# repomap: {repo_name} ({} LOC, {} files) | naive full map (M0 — no ranking/budgeting yet)",
+        "# atlas: {repo_name} ({} LOC, {} files) | naive full map (M0 — no ranking/budgeting yet)",
         stats.total_lines, stats.parsed_files
     );
 

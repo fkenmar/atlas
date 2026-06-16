@@ -10,7 +10,7 @@
 
 use std::process::ExitCode;
 
-use repomap::lang::Language;
+use atlas::lang::Language;
 
 fn main() -> ExitCode {
     let Some(path) = std::env::args().nth(1) else {

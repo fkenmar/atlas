@@ -1,5 +1,5 @@
 //! Incremental cache (FR-6): parse results keyed on (file path, content
-//! hash, cache version), serialized with bincode into `.repomap/cache`.
+//! hash, cache version), serialized with bincode into `.atlas/cache`.
 //! Only changed files re-parse; a cache-version bump invalidates everything.
 //! The cache is purely an optimization and is always safe to delete: every
 //! I/O or decode failure degrades silently to a cold parse, never an error.
@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use crate::parse::ParsedFile;
 
 /// Bumped whenever extraction output or the grammar set changes, so a stale
-/// cache from an older repomap is discarded wholesale rather than returning
+/// cache from an older atlas is discarded wholesale rather than returning
 /// out-of-date symbols. (Tie to grammar crate versions once they're surfaced.)
 const CACHE_VERSION: u32 = 2;
 
@@ -26,7 +26,7 @@ struct CacheFile {
     entries: BTreeMap<String, CacheEntry>,
 }
 
-/// Content-hash-keyed parse cache under `<repo_root>/.repomap/cache`.
+/// Content-hash-keyed parse cache under `<repo_root>/.atlas/cache`.
 pub struct Cache {
     path: PathBuf,
     /// Entries loaded from disk (read for hits).
@@ -38,9 +38,9 @@ pub struct Cache {
 }
 
 impl Cache {
-    /// Open (or start fresh) the cache under `<repo_root>/.repomap/cache`.
+    /// Open (or start fresh) the cache under `<repo_root>/.atlas/cache`.
     pub fn open(repo_root: &Path) -> Cache {
-        let path = repo_root.join(".repomap").join("cache");
+        let path = repo_root.join(".atlas").join("cache");
         let loaded = load(&path).unwrap_or_default();
         Cache {
             path,
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn round_trips_through_disk() {
-        let dir = std::env::temp_dir().join(format!("repomap-cache-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("atlas-cache-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
 
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn save_prunes_files_not_seen_this_run() {
-        let dir = std::env::temp_dir().join(format!("repomap-cache-prune-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("atlas-cache-prune-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
 

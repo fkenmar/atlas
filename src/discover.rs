@@ -2,7 +2,7 @@
 //! to parse, in a deterministic (sorted) order.
 //!
 //! M0 scope: built-in vendored-path defaults and hidden-directory skipping.
-//! Full .gitignore/.repomapignore handling (FR-7) lands in M1 with the rest
+//! Full .gitignore/.atlasignore handling (FR-7) lands in M1 with the rest
 //! of the core. Symlinks are never followed (cycle safety).
 
 use std::path::{Path, PathBuf};
@@ -94,7 +94,7 @@ pub fn discover(root: &Path) -> Vec<SourceFile> {
     out
 }
 
-/// Minimal `.gitignore` / `.repomapignore` matcher (FR-7). Supports the common
+/// Minimal `.gitignore` / `.atlasignore` matcher (FR-7). Supports the common
 /// forms: comments, blank lines, `dir/` (directory-only), `*` segment globs,
 /// basename patterns (no `/`, match any path component) and root-relative path
 /// patterns (containing `/`). Not handled in v1: negation (`!`), `**`, and
@@ -116,7 +116,7 @@ struct Rule {
 impl IgnoreRules {
     fn load(root: &Path) -> IgnoreRules {
         let mut rules = Vec::new();
-        for name in [".gitignore", ".repomapignore"] {
+        for name in [".gitignore", ".atlasignore"] {
             let Ok(content) = std::fs::read_to_string(root.join(name)) else {
                 continue;
             };

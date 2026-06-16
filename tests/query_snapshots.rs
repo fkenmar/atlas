@@ -69,17 +69,17 @@ fn query_rust_tags_contract() {
 /// committed snapshot. `UPDATE_SNAPSHOTS=1` regenerates (review the diff like
 /// code). Covers every wired Tier 1 grammar so a query change in any language
 /// fails loudly here.
-fn assert_fixture_snapshot(stem: &str, ext: &str, lang: repomap::lang::Language) {
+fn assert_fixture_snapshot(stem: &str, ext: &str, lang: atlas::lang::Language) {
     let rel = format!("{stem}.{ext}");
     let fixture = format!("tests/queries/fixtures/{rel}");
     let snapshot_path = format!("tests/queries/snapshots/{stem}.snap");
 
-    let file = repomap::discover::SourceFile {
+    let file = atlas::discover::SourceFile {
         path: std::path::PathBuf::from(&fixture),
         rel: rel.clone(),
         lang,
     };
-    let parsed = repomap::parse::parse_file(&file)
+    let parsed = atlas::parse::parse_file(&file)
         .unwrap_or_else(|| panic!("{fixture} must parse — it is our own fixture"));
 
     let mut rendered = String::new();
@@ -117,17 +117,17 @@ fn assert_fixture_snapshot(stem: &str, ext: &str, lang: repomap::lang::Language)
 
 #[test]
 fn query_python_fixture_snapshot() {
-    assert_fixture_snapshot("python", "py", repomap::lang::Language::Python);
+    assert_fixture_snapshot("python", "py", atlas::lang::Language::Python);
 }
 
 #[test]
 fn query_typescript_fixture_snapshot() {
-    assert_fixture_snapshot("typescript", "ts", repomap::lang::Language::TypeScript);
+    assert_fixture_snapshot("typescript", "ts", atlas::lang::Language::TypeScript);
 }
 
 #[test]
 fn query_rust_fixture_snapshot() {
-    assert_fixture_snapshot("rust", "rs", repomap::lang::Language::Rust);
+    assert_fixture_snapshot("rust", "rs", atlas::lang::Language::Rust);
 }
 
 #[test]

@@ -13,7 +13,7 @@ use crate::lang::Language;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "repomap",
+    name = "atlas",
     version,
     about = "Compile a codebase into a token-budgeted structural map for LLM coding agents"
 )]
@@ -63,7 +63,7 @@ pub fn run() {
 
 fn run_with(cli: Cli) -> Result<(), i32> {
     let root = cli.path.canonicalize().map_err(|err| {
-        eprintln!("repomap: cannot open {}: {err}", cli.path.display());
+        eprintln!("atlas: cannot open {}: {err}", cli.path.display());
         2
     })?;
     let repo_name = root
@@ -85,7 +85,7 @@ fn run_with(cli: Cli) -> Result<(), i32> {
     let ranking = crate::rank::rank(&graph, &focus);
 
     let counter = TiktokenCounter::cl100k().map_err(|err| {
-        eprintln!("repomap: could not initialize the tokenizer: {err}");
+        eprintln!("atlas: could not initialize the tokenizer: {err}");
         1
     })?;
     let opts = BudgetOptions {
@@ -123,7 +123,7 @@ fn parse_langs(csv: Option<&str>) -> Result<Vec<Language>, i32> {
         match Language::from_extension(token) {
             Some(lang) => langs.push(lang),
             None => {
-                eprintln!("repomap: unknown language extension {token:?}");
+                eprintln!("atlas: unknown language extension {token:?}");
                 return Err(2);
             }
         }
@@ -144,7 +144,7 @@ fn resolve_focus(
     let mut seeds = Vec::new();
     for target in focus {
         let Some(rel) = canonical_rel(target, root) else {
-            eprintln!("repomap: --focus path not found under the repo: {target:?}");
+            eprintln!("atlas: --focus path not found under the repo: {target:?}");
             continue;
         };
         let dir_prefix = format!("{rel}/");
@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn defaults() {
-        let cli = parse(&["repomap"]);
+        let cli = parse(&["atlas"]);
         assert_eq!(cli.path, PathBuf::from("."));
         assert_eq!(cli.budget, DEFAULT_BUDGET);
         assert_eq!(cli.format, Format::Md);
@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn parses_flags() {
         let cli = parse(&[
-            "repomap",
+            "atlas",
             "../somewhere",
             "--budget",
             "4096",
@@ -213,11 +213,11 @@ mod tests {
 
     #[test]
     fn accepts_known_formats_rejects_bad_input() {
-        assert!(Cli::try_parse_from(["repomap", "--budget", "notanumber"]).is_err());
-        assert_eq!(parse(&["repomap", "--format", "json"]).format, Format::Json);
-        assert_eq!(parse(&["repomap", "--format", "md"]).format, Format::Md);
+        assert!(Cli::try_parse_from(["atlas", "--budget", "notanumber"]).is_err());
+        assert_eq!(parse(&["atlas", "--format", "json"]).format, Format::Json);
+        assert_eq!(parse(&["atlas", "--format", "md"]).format, Format::Md);
         // xml lands in M3.
-        assert!(Cli::try_parse_from(["repomap", "--format", "xml"]).is_err());
+        assert!(Cli::try_parse_from(["atlas", "--format", "xml"]).is_err());
     }
 
     #[test]

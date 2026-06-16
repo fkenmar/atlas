@@ -394,7 +394,7 @@ fn is_const_name(name: &str) -> bool {
 }
 
 /// Compile each language's tags.scm once per process. A query that fails to
-/// compile is a repomap bug, not a user error: warn once and skip the
+/// compile is a atlas bug, not a user error: warn once and skip the
 /// language rather than crash (FR-12).
 fn compiled_query(lang: Language) -> Option<&'static Query> {
     static PYTHON: OnceLock<Option<Query>> = OnceLock::new();
@@ -413,7 +413,7 @@ fn build_query(lang: Language) -> Option<Query> {
         Ok(query) => Some(query),
         Err(err) => {
             eprintln!(
-                "repomap: internal error: queries/{}/tags.scm failed to compile: {err}",
+                "atlas: internal error: queries/{}/tags.scm failed to compile: {err}",
                 lang.name()
             );
             None

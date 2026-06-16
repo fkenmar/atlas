@@ -1,4 +1,5 @@
 /target
+.atlas/
 .repomap/
 benchmark/results/*.local.json
 benchmark/.work/

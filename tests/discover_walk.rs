@@ -2,8 +2,8 @@
 //! tests/discover_fixture/ (vendored dirs and hidden dirs excluded, output
 //! sorted — NFR-4).
 
-use repomap::discover::discover;
-use repomap::lang::Language;
+use atlas::discover::discover;
+use atlas::lang::Language;
 
 #[test]
 fn walks_fixture_tree_with_exclusions_and_sorted_output() {

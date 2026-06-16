@@ -1,4 +1,4 @@
-//! repomap — compile a codebase into a token-budgeted structural map for LLM
+//! atlas — compile a codebase into a token-budgeted structural map for LLM
 //! coding agents.
 //!
 //! Pipeline: discover → parse → link → rank → budget → render. Each stage
