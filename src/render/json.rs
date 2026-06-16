@@ -65,13 +65,14 @@ fn render_file(file: &BudgetedFile) -> String {
     let symbols: Vec<String> = file.symbols.iter().map(render_symbol).collect();
     let imports: Vec<String> = file.imports.iter().map(|i| json_str(i)).collect();
     format!(
-        "{{\"path\": {}, \"lang\": {}, \"rank\": {}, \"score\": {:.6}, \"imported_by\": {}, \"one_line\": {}, \"symbols\": [{}], \"imports\": [{}]}}",
+        "{{\"path\": {}, \"lang\": {}, \"rank\": {}, \"score\": {:.6}, \"imported_by\": {}, \"one_line\": {}, \"omitted\": {}, \"symbols\": [{}], \"imports\": [{}]}}",
         json_str(&file.rel),
         json_str(file.lang),
         file.rank,
         file.score,
         file.imported_by,
         file.one_line,
+        file.omitted,
         symbols.join(", "),
         imports.join(", "),
     )
@@ -183,6 +184,7 @@ mod tests {
                     line: 12,
                 }],
                 one_line: false,
+                omitted: 0,
             }],
             collapsed: vec![CollapsedDir {
                 dir: "tests".to_string(),

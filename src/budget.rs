@@ -26,6 +26,10 @@ use crate::rank::Ranking;
 /// Default token budget (PRD G1 / §5.2).
 pub const DEFAULT_BUDGET: usize = 2048;
 
+/// How many top-ranked symbols a file shows in the partial rung before the
+/// rest are summarized as "… (N more)". A starting point, benchmark-tunable.
+const PARTIAL_SYMBOLS: usize = 8;
+
 /// Exact-count tokenizer (FR-11: pluggable). Implementors count the BPE
 /// tokens in a rendered map; the budget packer is generic over this so tests
 /// can use a cheap stand-in instead of loading a real vocabulary.
@@ -127,6 +131,9 @@ pub struct BudgetedFile {
     /// top-ranked file from blanking out the whole map. `symbols` is retained
     /// for the count.
     pub one_line: bool,
+    /// Partial rung: count of symbols dropped to fit (`symbols` then holds the
+    /// top-ranked survivors, displayed in source order). 0 = the file is whole.
+    pub omitted: usize,
 }
 
 pub struct RenderedSymbol {
@@ -156,8 +163,10 @@ pub fn pack<T: Tokenizer>(
     opts: &BudgetOptions,
     counter: &T,
 ) -> BudgetedMap {
-    // Per-file PageRank-derived score and import in-degree.
+    // Per-file PageRank-derived score, per-symbol scores (for the partial
+    // rung's top-K selection), and import in-degree.
     let scores = file_scores(files, graph, ranking);
+    let sym_scores = per_symbol_scores(files, graph, ranking);
     let imported_by = file_import_indegree(files.len(), graph);
 
     // Files in rank order (score desc, path asc — deterministic).
@@ -191,7 +200,16 @@ pub fn pack<T: Tokenizer>(
         let mut shown = vec![false; files.len()];
         let mut included: Vec<BudgetedFile> = Vec::new();
         for (rank, &fi) in order.iter().enumerate() {
-            let f = build_file(fi, files, &scores, &imported_by, rank + 1, detail);
+            let f = build_file(
+                fi,
+                files,
+                &scores,
+                &sym_scores[fi],
+                &imported_by,
+                rank + 1,
+                detail,
+                None,
+            );
             if f.symbols.is_empty() && f.imports.is_empty() {
                 continue; // no visible content → falls to the skeleton footer
             }
@@ -211,23 +229,50 @@ pub fn pack<T: Tokenizer>(
     }
 
     // Rung 3: at the most compact detail, greedily include by rank. Each file
-    // is tried at its full block, then — if that overflows — as a one-line
-    // summary, so a single huge top-ranked file can't blank out the whole map
+    // is tried most-informative-first — full block, then a top-K partial (its
+    // highest-ranked symbols), then a one-line summary — so a too-large file
+    // surfaces as much of its real API as fits instead of collapsing whole
     // (the pytest failure mode). Anything that doesn't fit even as one line
-    // collapses into the directory-skeleton footer (none lost). Re-render on
-    // each candidate so the count stays exact.
+    // falls to the directory-skeleton footer (none lost). Re-render on each
+    // candidate so the count stays exact.
     let detail = Detail::NoParams;
     let mut shown = vec![false; files.len()];
     let mut included: Vec<BudgetedFile> = Vec::new();
     for (rank, &fi) in order.iter().enumerate() {
-        let file = build_file(fi, files, &scores, &imported_by, rank + 1, detail);
-        if file.symbols.is_empty() && file.imports.is_empty() {
+        let full = build_file(
+            fi,
+            files,
+            &scores,
+            &sym_scores[fi],
+            &imported_by,
+            rank + 1,
+            detail,
+            None,
+        );
+        if full.symbols.is_empty() && full.imports.is_empty() {
             continue; // empty → collapsed via the complement below
         }
+        let partial = build_file(
+            fi,
+            files,
+            &scores,
+            &sym_scores[fi],
+            &imported_by,
+            rank + 1,
+            detail,
+            Some(PARTIAL_SYMBOLS),
+        );
+        let mut one_line = clone_file(&full);
+        one_line.one_line = true;
+        // Try in order; the partial only differs from full when it dropped
+        // symbols, so skip it otherwise.
+        let candidates = [
+            Some(full),
+            (partial.omitted > 0).then_some(partial),
+            Some(one_line),
+        ];
         let mut placed = false;
-        for one_line in [false, true] {
-            let mut candidate = clone_file(&file);
-            candidate.one_line = one_line;
+        for candidate in candidates.into_iter().flatten() {
             let mut trial_shown = shown.clone();
             trial_shown[fi] = true;
             let mut trial = clone_files(&included);
@@ -246,7 +291,7 @@ pub fn pack<T: Tokenizer>(
             }
         }
         if !placed {
-            // Even a ~one-line entry overflows → the budget is full; this file
+            // Even a one-line entry overflows → the budget is full; this file
             // and every lower-ranked one fall to the footer.
             break;
         }
@@ -298,6 +343,30 @@ fn file_scores(files: &[(SourceFile, ParsedFile)], graph: &Graph, ranking: &Rank
     scores
 }
 
+/// PageRank score of each symbol, indexed `[file][symbol-within-file]`, for
+/// the partial rung's top-K selection. Symbols not represented as graph nodes
+/// keep a 0.0 score.
+fn per_symbol_scores(
+    files: &[(SourceFile, ParsedFile)],
+    graph: &Graph,
+    ranking: &Ranking,
+) -> Vec<Vec<f64>> {
+    let mut out: Vec<Vec<f64>> = files
+        .iter()
+        .map(|(_, parsed)| vec![0.0f64; parsed.symbols.len()])
+        .collect();
+    for (idx, node) in graph.nodes.iter().enumerate() {
+        if node.kind == NodeKind::Symbol {
+            if let Some(si) = node.symbol {
+                if let Some(slot) = out.get_mut(node.file).and_then(|f| f.get_mut(si)) {
+                    *slot = ranking.score(idx);
+                }
+            }
+        }
+    }
+    out
+}
+
 /// Import in-degree of each File node (“imported by N files”).
 fn file_import_indegree(num_files: usize, graph: &Graph) -> Vec<usize> {
     let mut indeg = vec![0usize; num_files];
@@ -313,29 +382,55 @@ fn file_import_indegree(num_files: usize, graph: &Graph) -> Vec<usize> {
     indeg
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_file(
     fi: usize,
     files: &[(SourceFile, ParsedFile)],
     scores: &[f64],
+    symbol_scores: &[f64],
     imported_by: &[usize],
     rank: usize,
     detail: Detail,
+    max_symbols: Option<usize>,
 ) -> BudgetedFile {
     let (src, parsed) = &files[fi];
-    let symbols = parsed
+    // Keep the original index alongside each visible symbol so we can rank by
+    // PageRank score for the partial rung yet still display in source order.
+    let mut visible: Vec<usize> = parsed
         .symbols
         .iter()
-        .filter(|s| detail.includes_private() || s.visibility == Visibility::Public)
-        .map(|s| RenderedSymbol {
-            kind: s.kind,
-            name: s.name.clone(),
-            signature: if detail.strips_params() {
-                strip_param_names(&s.signature)
-            } else {
-                s.signature.clone()
-            },
-            visibility: s.visibility,
-            line: s.line,
+        .enumerate()
+        .filter(|(_, s)| detail.includes_private() || s.visibility == Visibility::Public)
+        .map(|(i, _)| i)
+        .collect();
+    let omitted = match max_symbols {
+        Some(k) if visible.len() > k => {
+            // Keep the k highest-scoring symbols, then restore source order.
+            visible.sort_by(|&a, &b| {
+                score_at(symbol_scores, b).total_cmp(&score_at(symbol_scores, a))
+            });
+            let dropped = visible.len() - k;
+            visible.truncate(k);
+            visible.sort_unstable();
+            dropped
+        }
+        _ => 0,
+    };
+    let symbols = visible
+        .iter()
+        .map(|&i| {
+            let s = &parsed.symbols[i];
+            RenderedSymbol {
+                kind: s.kind,
+                name: s.name.clone(),
+                signature: if detail.strips_params() {
+                    strip_param_names(&s.signature)
+                } else {
+                    s.signature.clone()
+                },
+                visibility: s.visibility,
+                line: s.line,
+            }
         })
         .collect();
     BudgetedFile {
@@ -347,7 +442,12 @@ fn build_file(
         imports: parsed.imports.clone(),
         symbols,
         one_line: false,
+        omitted,
     }
+}
+
+fn score_at(scores: &[f64], i: usize) -> f64 {
+    scores.get(i).copied().unwrap_or(0.0)
 }
 
 /// Collapse every file NOT in `shown` into the directory-skeleton footer, so
@@ -503,6 +603,7 @@ fn clone_file(f: &BudgetedFile) -> BudgetedFile {
             })
             .collect(),
         one_line: f.one_line,
+        omitted: f.omitted,
     }
 }
 
@@ -717,12 +818,60 @@ mod tests {
             !map.files.is_empty(),
             "map must not be empty when smaller files fit"
         );
+        // The huge top file must degrade — a partial (top-K) view or, failing
+        // that, a one-line summary — never blank the map.
         assert!(
-            map.files.iter().any(|f| f.one_line),
-            "the huge top file should collapse to a one-line summary"
+            map.files.iter().any(|f| f.one_line || f.omitted > 0),
+            "the huge top file should degrade to partial or one-line"
         );
         let collapsed: usize = map.collapsed.iter().map(|c| c.count).sum();
         assert_eq!(map.files.len() + collapsed, 6, "none lost");
+    }
+
+    #[test]
+    fn partial_rung_keeps_highest_scored_symbols() {
+        // A file with one widely-referenced symbol + many unreferenced ones,
+        // under a budget too tight for the full block, must keep the
+        // referenced symbol (highest PageRank) in its partial view.
+        let mut syms = vec![sym("hot", Visibility::Public, "def hot() -> int")];
+        for i in 0..40 {
+            syms.push(sym(
+                &format!("cold{i}"),
+                Visibility::Public,
+                &format!("def cold{i}(a: int, b: int) -> int"),
+            ));
+        }
+        let mut files = vec![pfile("big.py", syms)];
+        // Several callers reference `hot`, lifting its symbol PageRank.
+        for i in 0..4 {
+            files.push(pfile(
+                &format!("caller{i}.py"),
+                vec![sym("c", Visibility::Public, "def c() -> int")],
+            ));
+            // make caller reference `hot`
+            files[i + 1].1.references.push("hot".to_string());
+        }
+        let g = graph_of(&files);
+        let r = crate::rank::rank(&g, &[]);
+        let opts = BudgetOptions {
+            // Wide enough for the top-K partial block but not all 41 symbols.
+            budget_tokens: 120,
+            no_private: false,
+        };
+        let map = pack(&files, &g, &r, "demo", stats(5), &opts, &WordCounter);
+        let big = map
+            .files
+            .iter()
+            .find(|f| f.rel == "big.py")
+            .expect("big.py shown");
+        assert!(
+            big.omitted > 0,
+            "big.py should be partial under a tight budget"
+        );
+        assert!(
+            big.symbols.iter().any(|s| s.name == "hot"),
+            "the widely-referenced symbol must survive the top-K cut"
+        );
     }
 
     #[test]

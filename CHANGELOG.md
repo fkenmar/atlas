@@ -9,6 +9,13 @@ benchmark delta.
 ## [Unreleased]
 
 ### Changed
+- Budget rung 3 gained a **partial-file rung**: when a file's full block won't
+  fit, it now shows its top-K highest-PageRank symbols (default 8) plus a
+  "… (N more symbols)" note, instead of collapsing straight to a one-line count.
+  A too-large core file now surfaces its most important API rather than just
+  its existence — more information at the same token budget (pytest's
+  `src/_pytest/_py/path.py` went from "(101 symbols)" to its top 8 signatures +
+  93 more). `omitted` added to BudgetedFile and the JSON schema.
 - Symbol visibility is now language-aware instead of Python-underscore-only:
   Rust items are public iff declared `pub`/`pub(crate)` (bare fns, non-exported
   helpers, and non-`#[macro_export]` macros are correctly private); TypeScript

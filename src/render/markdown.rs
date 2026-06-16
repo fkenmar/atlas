@@ -66,6 +66,10 @@ pub fn render(map: &BudgetedMap) -> String {
             };
             let _ = writeln!(out, "{indent}{}", symbol.signature);
         }
+        // Partial rung: the file's lower-ranked symbols were dropped to fit.
+        if file.omitted > 0 {
+            let _ = writeln!(out, "… ({} more symbol(s))", file.omitted);
+        }
         if !file.imports.is_empty() {
             let _ = writeln!(out, "imports: {}", file.imports.join(", "));
         }
