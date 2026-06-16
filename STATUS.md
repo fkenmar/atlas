@@ -9,6 +9,10 @@
 
 Next milestone: **M1 — Core (v0.1 alpha)**: TS/JS + Rust grammars; import linking; PageRank; tiktoken budgeting; md + json renderers; cache; gitignore (2 wks). Burn-down runs through the self-improvement loop — `/improve` or `/loop /improve` (docs/SELF_IMPROVEMENT.md); measured changes append to benchmark/history.md.
 
+## M1 core built — 2026-06-16 (autonomous session)
+
+The full pipeline now runs end-to-end (`repomap [PATH] --budget --focus --lang --no-private --format md|json`). **All M1 functional requirements done:** FR-1 (TS+Rust grammars), FR-3/FR-11 (tiktoken `cl100k_base` budget + degradation ladder), FR-4 (personalized PageRank), FR-5 (md + json), FR-6 (bincode content-hash cache), FR-7 (`.gitignore`/`.repomapignore`), FR-12. **NFR-1 cold:** 0.25 s on pytest 92 k LOC (8× under the 2 s target; warm-path wall-clock verification still pending). **Remaining for M1 exit:** the *benchmark-shows-a-measurable-win* criterion (first fair with-map vs without-map checkpoint **in flight**), warm-path timing, optional rayon. Dogfood self-map of repomap's own source: 3.7 k LOC → ~1.4 k tokens at full detail. Quality fixes baked in: test-code excluded from extraction, ranking de-biased against symbol count, per-file one-line rung, language-aware visibility. Full history in CHANGELOG.md.
+
 ## Board
 
 | NOW | NEXT | NOT-YET |
