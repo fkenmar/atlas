@@ -40,6 +40,14 @@ benchmark delta.
   freed enough budget to show the entire real API at full signature fidelity.
 
 ### Added
+- M1 ignore handling (FR-7): discover now reads root-level `.gitignore` and
+  `.repomapignore` and skips matching files/dirs during the walk (in addition
+  to the built-in vendored-path defaults). The hand-rolled matcher supports the
+  common forms — comments, blank lines, `dir/` (directory-only), `*` segment
+  globs, basename patterns (match any path component), and root-relative path
+  patterns. Not handled in v1: negation (`!`), `**`, nested ignore files
+  (documented; a later milestone may adopt the `ignore` crate). No new
+  dependency.
 - M1 incremental cache (FR-6): parse results are cached in `.repomap/cache`
   (bincode), keyed on each file's content hash plus a cache version. Unchanged
   files reuse their stored parse instead of re-running tree-sitter; a changed
