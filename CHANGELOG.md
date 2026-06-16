@@ -31,6 +31,12 @@ benchmark delta.
   freed enough budget to show the entire real API at full signature fidelity.
 
 ### Added
+- M1 JSON renderer (FR-5/json): `--format json` emits the versioned PRD §7.3
+  schema (`version`, `repo`, `budget{target,rendered,detail}`, `files[{path,
+  lang,rank,score,imported_by,one_line,symbols[{kind,name,sig,line,
+  visibility}],imports}]`, `collapsed`, skip/unwired counts). Hand-serialized
+  with spec-correct string escaping (no serde dependency yet) and deterministic
+  output. `BudgetedFile`/`RenderedSymbol` gained `lang` and per-symbol `line`.
 - M1 CLI integration: clap (derive) drives the full pipeline end-to-end —
   `repomap [PATH] --budget N --focus PATH... --lang csv --no-private`. discover
   → parse → link → rank (with `--focus` paths mapped to PageRank seeds) →

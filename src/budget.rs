@@ -112,6 +112,8 @@ pub struct BudgetedMap {
 
 pub struct BudgetedFile {
     pub rel: String,
+    /// Lowercase language name (`python`/`typescript`/`rust`), for JSON.
+    pub lang: &'static str,
     /// 1-based display rank.
     pub rank: usize,
     pub score: f64,
@@ -133,6 +135,8 @@ pub struct RenderedSymbol {
     /// Signature after any detail degradation (param-name stripping).
     pub signature: String,
     pub visibility: Visibility,
+    /// 1-based source line of the declaration (for JSON).
+    pub line: usize,
 }
 
 pub struct CollapsedDir {
@@ -331,10 +335,12 @@ fn build_file(
                 s.signature.clone()
             },
             visibility: s.visibility,
+            line: s.line,
         })
         .collect();
     BudgetedFile {
         rel: src.rel.clone(),
+        lang: src.lang.name(),
         rank,
         score: scores[fi],
         imported_by: imported_by[fi],
@@ -480,6 +486,7 @@ fn clone_base(base: &BudgetedMap) -> BudgetedMap {
 fn clone_file(f: &BudgetedFile) -> BudgetedFile {
     BudgetedFile {
         rel: f.rel.clone(),
+        lang: f.lang,
         rank: f.rank,
         score: f.score,
         imported_by: f.imported_by,
@@ -492,6 +499,7 @@ fn clone_file(f: &BudgetedFile) -> BudgetedFile {
                 name: s.name.clone(),
                 signature: s.signature.clone(),
                 visibility: s.visibility,
+                line: s.line,
             })
             .collect(),
         one_line: f.one_line,

@@ -48,6 +48,8 @@ pub struct Cli {
 pub enum Format {
     /// Markdown (default), optimized for LLM readability.
     Md,
+    /// Versioned JSON schema for programmatic consumers (PRD §7.3).
+    Json,
 }
 
 /// Entry point called from `main`. Exits the process with a status code.
@@ -100,6 +102,7 @@ fn run_with(cli: Cli) -> Result<(), i32> {
 
     match cli.format {
         Format::Md => print!("{}", crate::render::markdown::render(&map)),
+        Format::Json => print!("{}", crate::render::json::render(&map)),
     }
     Ok(())
 }
@@ -207,9 +210,12 @@ mod tests {
     }
 
     #[test]
-    fn rejects_bad_budget_and_unknown_format() {
+    fn accepts_known_formats_rejects_bad_input() {
         assert!(Cli::try_parse_from(["repomap", "--budget", "notanumber"]).is_err());
-        assert!(Cli::try_parse_from(["repomap", "--format", "json"]).is_err());
+        assert_eq!(parse(&["repomap", "--format", "json"]).format, Format::Json);
+        assert_eq!(parse(&["repomap", "--format", "md"]).format, Format::Md);
+        // xml lands in M3.
+        assert!(Cli::try_parse_from(["repomap", "--format", "xml"]).is_err());
     }
 
     #[test]
