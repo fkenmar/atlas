@@ -22,7 +22,7 @@ human's job shrinks to the decisions only a human can make.
 2. **Snapshot the before-stats** for whatever the item can affect:
    - always: `cargo test` count green, clippy clean;
    - extraction changes: current snapshot files;
-   - perf-relevant changes: `time target/release/repomap <pinned pytest clone>`;
+   - perf-relevant changes: `time target/release/atlas <pinned pytest clone>`;
    - agent-behavior changes (ranking/budgeting/extraction/render): the
      relevant medians from benchmark/history.md.
 3. **Implement.** Tests first where the change is testable (extraction →

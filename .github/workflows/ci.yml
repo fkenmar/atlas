@@ -38,7 +38,7 @@ jobs:
       # M1 CLI lands.
       - name: self-map smoke test (auto-enables once M1 lands)
         run: |
-          bin=target/release/repomap
+          bin=target/release/atlas
           if "$bin" --help 2>/dev/null | grep -q -- '--budget'; then
             echo "binary supports --budget; running self-map"
             "$bin" . --budget 1024 > /dev/null
