@@ -1,4 +1,4 @@
-# repomap
+# atlas
 
 > Compile a codebase into a token-budgeted structural map for LLM coding agents.
 
