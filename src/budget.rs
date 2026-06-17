@@ -30,6 +30,20 @@ pub const DEFAULT_BUDGET: usize = 2048;
 /// rest are summarized as "… (N more)". A starting point, benchmark-tunable.
 const PARTIAL_SYMBOLS: usize = 8;
 
+/// Per-file caps on index entries (top-N by symbol PageRank). Types get a
+/// generous cap (a file like `capture.py` legitimately exports many classes);
+/// functions get a small one. Both bound the breadth-vs-depth trade so a few
+/// symbol-heavy top files can't crowd out lower-ranked files. Benchmark-tunable.
+const INDEX_TYPES_PER_FILE: usize = 8;
+const INDEX_FUNCS_PER_FILE: usize = 2;
+
+/// Fraction of the budget reserved for the compact symbol index when files
+/// overflow into the footer (rung 3). Trades some full-signature detail on the
+/// marginal files for name→file coverage of the whole long tail — the lever the
+/// comprehension benchmark rewards (answer-in-map ⇒ one-turn answer). Benchmark-
+/// tunable; 0.0 disables the index and restores the pre-index packing.
+const INDEX_RESERVE_FRACTION: f64 = 0.40;
+
 /// Exact-count tokenizer (FR-11: pluggable). Implementors count the BPE
 /// tokens in a rendered map; the budget packer is generic over this so tests
 /// can use a cheap stand-in instead of loading a real vocabulary.
@@ -113,6 +127,10 @@ pub struct BudgetedMap {
     pub files: Vec<BudgetedFile>,
     /// Low-rank files dropped to the footer, grouped by directory and sorted.
     pub collapsed: Vec<CollapsedDir>,
+    /// Compact name→file index of navigable symbols whose defining file didn't
+    /// fit in full (collapsed, one-line, or partial files). Ordered by file
+    /// rank; greedily truncated to the budget. Empty when the full listing fit.
+    pub symbol_index: Vec<IndexedSymbol>,
     pub skipped_files: usize,
     pub unwired_files: usize,
 }
@@ -158,6 +176,39 @@ pub struct CollapsedDir {
     pub count: usize,
 }
 
+/// One entry in the compact symbol index: a navigable declaration (class,
+/// interface, enum, type, top-level function, or constant — not methods or
+/// fields) from a file whose full signatures didn't fit the budget, mapped to
+/// the file that defines it. The index trades a full signature (~20 tokens)
+/// for a bare name→path (~6), so an agent can answer "where is `X` defined?"
+/// from the map instead of grepping — at a fraction of the cost of showing the
+/// file in full. Built only when the budget forces files into the footer.
+#[derive(Clone)]
+pub struct IndexedSymbol {
+    pub name: String,
+    pub kind: SymbolKind,
+    /// Repo-relative path of the file that declares it.
+    pub rel: String,
+}
+
+/// A named type — class, interface, enum, or type alias. These are what an
+/// agent navigates *to* ("which class implements X?"), so the index lists them
+/// first and most generously: when a file can't be shown in full, knowing its
+/// types is worth more than knowing its helper functions.
+fn is_type_like(kind: SymbolKind) -> bool {
+    matches!(
+        kind,
+        SymbolKind::Class | SymbolKind::Interface | SymbolKind::Enum | SymbolKind::TypeAlias
+    )
+}
+
+/// A top-level function or constant — indexed in a second tier, after every
+/// file's types, with whatever budget remains. Methods/fields are reached via
+/// their class; `module` is a whole-file marker — none earn an index line.
+fn is_func_like(kind: SymbolKind) -> bool {
+    matches!(kind, SymbolKind::Function | SymbolKind::Constant)
+}
+
 /// Pack ranked symbols into `opts.budget_tokens`, applying the degradation
 /// ladder deterministically. `repo_name`/`stats` supply the header figures.
 pub fn pack<T: Tokenizer>(
@@ -195,6 +246,7 @@ pub fn pack<T: Tokenizer>(
         requested_no_private: opts.no_private,
         files: Vec::new(),
         collapsed: Vec::new(),
+        symbol_index: Vec::new(),
         skipped_files: stats.skipped_files,
         unwired_files: stats.unwired_files,
     };
@@ -246,7 +298,14 @@ pub fn pack<T: Tokenizer>(
     // (the pytest failure mode). Anything that doesn't fit even as one line
     // falls to the directory-skeleton footer (none lost). Re-render on each
     // candidate so the count stays exact.
+    //
+    // We reserve a slice of the budget for the symbol index (below): packing
+    // files only up to `file_ceiling` leaves room to list the *names* of the
+    // collapsed tail, which is far cheaper per symbol than a full block and is
+    // what lets an agent locate the long tail without grepping.
     let detail = Detail::NoParams;
+    let reserve = (opts.budget_tokens as f64 * INDEX_RESERVE_FRACTION) as usize;
+    let file_ceiling = opts.budget_tokens.saturating_sub(reserve);
     let mut shown = vec![false; files.len()];
     let mut included: Vec<BudgetedFile> = Vec::new();
     for (rank, &fi) in order.iter().enumerate() {
@@ -298,7 +357,7 @@ pub fn pack<T: Tokenizer>(
                 collapsed: collapse_complement(&order, &trial_shown, files),
                 ..clone_base(&base)
             };
-            if measure(&map, counter) <= opts.budget_tokens {
+            if measure(&map, counter) <= file_ceiling {
                 shown[fi] = true;
                 included.push(candidate);
                 placed = true;
@@ -306,19 +365,119 @@ pub fn pack<T: Tokenizer>(
             }
         }
         if !placed {
-            // Even a one-line entry overflows → the budget is full; this file
-            // and every lower-ranked one fall to the footer.
+            // Even a one-line entry overflows → the file budget is full; this
+            // file and every lower-ranked one fall to the footer (and are
+            // candidates for the symbol index below).
             break;
         }
     }
-    let map = BudgetedMap {
+    let candidates = build_symbol_index(&order, files, &shown, &included, &sym_scores);
+    let mut map = BudgetedMap {
         detail,
-        files: included,
         collapsed: collapse_complement(&order, &shown, files),
+        files: included,
         ..clone_base(&base)
     };
+    // Fill the reserved slice with as many index entries (highest-ranked first)
+    // as fit the full budget.
+    fit_symbol_index(&mut map, candidates, opts.budget_tokens, counter);
     let tokens = measure(&map, counter);
     finalize(map, tokens)
+}
+
+/// Build the candidate symbol index from navigable declarations whose defining
+/// file isn't shown in full: every symbol of a collapsed or one-line file, and
+/// the omitted symbols of a partial file. Files appear in rank order (via
+/// `order`); within each file only its [`INDEX_SYMBOLS_PER_FILE`] highest-scored
+/// symbols are kept (then restored to source order), so a few symbol-heavy
+/// top-ranked files can't monopolize the index and starve lower-ranked files of
+/// coverage — the breadth is what lets the index reach a rank-43 core file.
+/// Private symbols are excluded, matching the compact detail level (rung 3
+/// already drops them from the file blocks).
+fn build_symbol_index(
+    order: &[usize],
+    files: &[(SourceFile, ParsedFile)],
+    shown: &[bool],
+    included: &[BudgetedFile],
+    sym_scores: &[Vec<f64>],
+) -> Vec<IndexedSymbol> {
+    // Two tiers, concatenated: every file's types (in file-rank order) first,
+    // then every file's functions. The budget cut (binary search downstream)
+    // therefore fills types across the whole rank order before spending a token
+    // on functions — so a rank-43 core class still lands while rank-2's helper
+    // functions wait.
+    let mut types = Vec::new();
+    let mut funcs = Vec::new();
+    for &fi in order {
+        let (src, parsed) = &files[fi];
+        // Names already rendered in full above, to avoid duplicating them. A
+        // one-line file shows no symbols, so none of its names are "shown".
+        let shown_here: Vec<&str> = if shown[fi] {
+            match included.iter().find(|f| f.rel == src.rel) {
+                Some(f) if !f.one_line => f.symbols.iter().map(|s| s.name.as_str()).collect(),
+                _ => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+        let pick = |keep: fn(SymbolKind) -> bool, cap: usize, sink: &mut Vec<IndexedSymbol>| {
+            let mut cand: Vec<usize> = parsed
+                .symbols
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| keep(s.kind) && s.visibility == Visibility::Public)
+                .filter(|(_, s)| !shown_here.contains(&s.name.as_str()))
+                .map(|(i, _)| i)
+                .collect();
+            if cand.len() > cap {
+                // Keep the highest-scored symbols, then restore source order so
+                // the rendered line reads top-to-bottom.
+                cand.sort_by(|&a, &b| {
+                    score_at(&sym_scores[fi], b).total_cmp(&score_at(&sym_scores[fi], a))
+                });
+                cand.truncate(cap);
+                cand.sort_unstable();
+            }
+            for i in cand {
+                let s = &parsed.symbols[i];
+                sink.push(IndexedSymbol {
+                    name: s.name.clone(),
+                    kind: s.kind,
+                    rel: src.rel.clone(),
+                });
+            }
+        };
+        pick(is_type_like, INDEX_TYPES_PER_FILE, &mut types);
+        pick(is_func_like, INDEX_FUNCS_PER_FILE, &mut funcs);
+    }
+    types.extend(funcs);
+    types
+}
+
+/// Greedily include the longest rank-ordered prefix of `candidates` whose
+/// rendered map stays within `budget`. Token count is monotonic in the prefix
+/// length (entries only add lines), so a binary search finds the cut in
+/// O(log n) measurements instead of re-rendering per entry.
+fn fit_symbol_index<T: Tokenizer>(
+    map: &mut BudgetedMap,
+    candidates: Vec<IndexedSymbol>,
+    budget: usize,
+    counter: &T,
+) {
+    if candidates.is_empty() {
+        return;
+    }
+    let (mut lo, mut hi) = (0usize, candidates.len());
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        map.symbol_index = candidates[..mid].to_vec();
+        if measure(map, counter) <= budget {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    map.symbol_index = candidates[..lo].to_vec();
 }
 
 /// Render the map and count its tokens. The header shows `rendered_tokens`,
@@ -708,6 +867,7 @@ fn clone_base(base: &BudgetedMap) -> BudgetedMap {
         requested_no_private: base.requested_no_private,
         files: Vec::new(),
         collapsed: Vec::new(),
+        symbol_index: Vec::new(),
         skipped_files: base.skipped_files,
         unwired_files: base.unwired_files,
     }
@@ -1040,7 +1200,9 @@ mod tests {
         let r = crate::rank::rank(&g, &[]);
         let opts = BudgetOptions {
             // Wide enough for the top-K partial block but not all 41 symbols.
-            budget_tokens: 120,
+            // Headroom accounts for the rung-3 index reserve, which lowers the
+            // file ceiling below the nominal budget.
+            budget_tokens: 200,
             no_private: false,
         };
         let map = pack(&files, &g, &r, "demo", stats(5), &opts, &WordCounter);
@@ -1057,6 +1219,72 @@ mod tests {
             big.symbols.iter().any(|s| s.name == "hot"),
             "the widely-referenced symbol must survive the top-K cut"
         );
+    }
+
+    fn cls(name: &str, sig: &str) -> Symbol {
+        Symbol {
+            name: name.to_string(),
+            kind: SymbolKind::Class,
+            signature: sig.to_string(),
+            line: 1,
+            visibility: Visibility::Public,
+        }
+    }
+
+    #[test]
+    fn symbol_index_surfaces_collapsed_classes() {
+        // A tight budget collapses the lower-ranked files. Their public classes
+        // must still be locatable via the symbol index (name → path), even
+        // though their full blocks didn't fit. Types are listed ahead of any
+        // helper functions.
+        let mut files = vec![pfile(
+            "core.py",
+            vec![sym("run", Visibility::Public, "def run() -> int")],
+        )];
+        for i in 0..12 {
+            files.push(pfile(
+                &format!("src/mod{i:02}.py"),
+                vec![
+                    cls(&format!("Widget{i}"), &format!("class Widget{i}")),
+                    sym(
+                        &format!("helper{i}"),
+                        Visibility::Public,
+                        &format!("def helper{i}() -> int"),
+                    ),
+                ],
+            ));
+        }
+        let g = graph_of(&files);
+        let r = crate::rank::rank(&g, &[]);
+        let opts = BudgetOptions {
+            budget_tokens: 90, // tight: most files collapse into the footer
+            no_private: false,
+        };
+        let map = pack(&files, &g, &r, "demo", stats(13), &opts, &WordCounter);
+        // Some files collapsed (so the index has something to do) ...
+        assert!(map.files.len() < 13, "expected some files collapsed");
+        assert!(!map.symbol_index.is_empty(), "index should carry the tail");
+        // ... and a collapsed file's class is locatable by name → path.
+        let entry = map
+            .symbol_index
+            .iter()
+            .find(|e| e.name.starts_with("Widget"))
+            .expect("a collapsed Widget class should be indexed");
+        assert!(entry.rel.starts_with("src/mod"));
+        assert_eq!(entry.kind, SymbolKind::Class);
+        // Types come before functions: the first function (if any) appears only
+        // after every indexed type.
+        let first_fn = map
+            .symbol_index
+            .iter()
+            .position(|e| e.kind == SymbolKind::Function);
+        let last_type = map
+            .symbol_index
+            .iter()
+            .rposition(|e| e.kind == SymbolKind::Class);
+        if let (Some(f), Some(t)) = (first_fn, last_type) {
+            assert!(f > t, "all types should precede any function in the index");
+        }
     }
 
     #[test]

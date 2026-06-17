@@ -90,6 +90,29 @@ pub fn render(map: &BudgetedMap) -> String {
         }
     }
 
+    // Symbol index: the navigable declarations of files that didn't fit in
+    // full, as bare name → path lines (grouped by file, rank order). Lets an
+    // agent locate the long tail without grepping, at a fraction of a full
+    // block's cost. Entries arrive already ordered (file rank, then source
+    // order), so runs from the same file are contiguous and group cleanly.
+    if !map.symbol_index.is_empty() {
+        out.push('\n');
+        out.push_str(
+            "---\nsymbol index (other defined symbols — names only; \
+             read the listed file for full signatures):\n",
+        );
+        let mut i = 0;
+        while i < map.symbol_index.len() {
+            let rel = &map.symbol_index[i].rel;
+            let mut names: Vec<&str> = Vec::new();
+            while i < map.symbol_index.len() && &map.symbol_index[i].rel == rel {
+                names.push(map.symbol_index[i].name.as_str());
+                i += 1;
+            }
+            let _ = writeln!(out, "{rel}: {}", names.join(", "));
+        }
+    }
+
     // Directory-skeleton footer: low-rank files dropped to fit, never silently
     // lost (PRD §5.1 — the skeleton is always retained).
     if !map.collapsed.is_empty() {

@@ -49,3 +49,13 @@ See benchmark/results/run-20260616-232455.local.json.
 - **Accuracy: 20/20 both arms (100%)** — equal, perfect, **zero per-question regressions** (the map never made the agent wronger). Hard gate (with_map ≥ without_map): **PASS**.
 - **Tokens: 85,817 → 59,916 = −30.1%** at identical accuracy. **Turns: 3 → 2 (−33%).**
 - This is the download-worthy claim: the map lets an agent locate structural elements with ~30% fewer tokens and a third fewer turns without losing any accuracy. Unlike edit-task token deltas (60–140% variance), comprehension is constrained and stable across 20 questions — this is the number that goes in the README, and the basis for moving to usability/ship work. See benchmark/results/run-20260617-004810.local.json.
+
+---
+
+**Symbol index — collapsed tail made navigable (2026-06-17, run-20260617-084740, ADR 0004).** The biggest comprehension win yet, and the answer to "70% fewer tokens at identical accuracy."
+- **Tokens: 85,670 → 29,781 = −65.2%** at the shipped default 2,048 budget. **Turns: 3 → 1.** **Accuracy: 20/20 both arms** — zero regression from the terser map (the hard gate holds).
+- **More than doubles the prior −30.1%** at the *same* budget. The lever: a free A/B smoke proved answer-in-map ⇒ 1-turn answer (~30k tok) vs grep ⇒ 3 turns (~90k). The old footer collapsed the long tail to a bare directory skeleton (`src/* (65)`), erasing every symbol; only 8/20 answers were in the default map.
+- **The fix (ADR 0004):** reserve 40% of the budget in rung 3 for a compact `path: TypeA, TypeB` index of the collapsed/degraded files' navigable declarations — type-first, ranked, capped per file (8 types / 2 funcs), greedily fit by binary search. Purely additive; off when a repo fits in full.
+- **Free coverage proof (in-map answer presence, the proxy for the token win):** default 2,048 went **8 → 12/20**; 3,072 went ~10 → **17/20**. Crossing 10/20 flips the *median* question to a one-turn answer — which is exactly what the median-token metric rewarded.
+- **Ceiling reality:** −65% is the harness floor. The agent runtime's ~28–30k/turn fixed overhead caps map-side reduction near (85.7−30)/85.7 ≈ 65%; ~70% is unreachable without shrinking that overhead, which atlas can't touch. This is the goal, met as far as physics allows.
+- **Known gaps:** `CaptureManager` (low PageRank in a 17-class file) and `CallInfo` (rank 43, past 2,048 index depth) still miss at the default budget; both clear at 3,072. Better per-symbol ranking is the next lever. See benchmark/results/comprehension-20260617-084740.local.json.

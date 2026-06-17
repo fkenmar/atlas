@@ -9,6 +9,15 @@ benchmark delta.
 ## [Unreleased]
 
 ### Added
+- **Symbol index for the collapsed tail (ADR 0004).** When files overflow the
+  budget, atlas now lists the *names* of the collapsed files' types — a compact
+  `path: ClassA, ClassB` index — instead of erasing them into a bare directory
+  skeleton, so an agent can locate the long tail without grepping. Type-first,
+  ranked, capped per file; appears only when files collapse. The JSON output
+  gains an additive `symbol_index` array (schema version unchanged). **Benchmark
+  delta:** comprehension **−65.2% tokens** (85,670 → 29,781) at **20/20 accuracy
+  in both arms**, median turns 3 → 1, at the default 2,048 budget — more than
+  doubling the prior −30.1% (run-20260617-084740).
 - **Prebuilt binary distribution via cargo-dist.** A GitHub Actions release
   workflow (`.github/workflows/release.yml`) cross-builds `atlas` for macOS,
   Linux, and Windows (x86_64 + arm64) and publishes a `curl | sh` shell

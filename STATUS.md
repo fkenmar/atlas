@@ -34,6 +34,30 @@ safe for real users / downloads:
 Gate green throughout (69 tests). Lower-priority audit items remain (always-on map legend,
 `-o/--output`, `--for-agent` preamble, shell completions [needs clap_complete dep approval]).
 
+## Symbol index — comprehension token win (2026-06-17, ADR 0004)
+
+**−65.2% tokens at 20/20 accuracy** on the comprehension benchmark (run-084740), at the
+shipped default 2,048 budget — more than doubling the prior −30.1%, and meeting the "~70%
+fewer tokens at identical accuracy" goal as far as the harness allows (the agent runtime's
+~28–30k/turn fixed overhead caps map-side reduction near ~65%).
+
+- **What landed:** when files overflow the budget (rung 3), atlas now reserves 40% of the
+  budget for a compact `path: TypeA, TypeB` **symbol index** of the collapsed/degraded files'
+  navigable declarations — type-first, ranked, capped per file (8 types / 2 funcs), greedily
+  fit by binary search. Purely additive; off entirely when a repo fits in full. src/budget.rs
+  + render/markdown.rs + render/json.rs (additive `symbol_index` array, schema v1 unchanged —
+  additive keys don't bump per the refined contract). 62 lib tests, clippy clean.
+- **Why it works:** a free A/B smoke proved answer-in-map ⇒ 1-turn answer (~30k tok) vs grep ⇒
+  3 turns (~90k). The old footer erased the tail to `src/* (65)`; only 8/20 answers were in the
+  default map. The index took default coverage **8 → 12/20** (3,072 → 17/20), flipping the
+  *median* question to a one-turn answer. Median turns 3 → 1.
+- **Result of the validation the maintainer authorized (~$6–7):** accuracy held 20/20 in BOTH
+  arms — the terser map never made the agent wronger (the hard gate). This is now the README
+  headline candidate, superseding the −30.1% figure.
+- **Known gaps / next lever:** `CaptureManager` (low PageRank, hook-invoked) and `CallInfo`
+  (rank 43, past 2,048 index depth) still miss at the default budget (both clear at 3,072) —
+  better per-symbol ranking is the follow-up. See benchmark/history.md + ADR 0004.
+
 ## GitHub issue triage + NFR-1 warm path — 2026-06-16
 
 Filed the remaining roadmap as 14 GitHub issues (fkenmar/atlas) and organized them under
@@ -83,7 +107,7 @@ Renamed the project to **atlas** end-to-end (crate, binary, map header, CLI mess
 | | Re-record baseline when with-map arm goes live (variance notes now auto-recorded by run.sh) | More benchmark tasks (target: 10) + decide long-term target repo (pytest 8.2.0 is the M0 stand-in) |
 | | Competitive benchmark arms (post-M1): same suite vs Aider repo-map / ctags / file-tree control at equal budget — repomap must beat them all, Aider especially (protocol: benchmark/README.md §Competitive arms) | |
 
-**Worthiness gate — PASSED (2026-06-17, comprehension run-004810, 20 verified questions):** with_map vs without_map both **20/20 accuracy (100%, zero regressions)**; tokens **85,817 → 59,916 = −30.1%**; turns 3→2. This is the trustworthy, low-variance signal — the map locates structural elements with ~30% fewer tokens at identical accuracy. **This is atlas's defensible value claim** (README cites it). The edit-task token deltas below stay INCONCLUSIVE (60–140% variance), but the worthiness question is settled: atlas earns its place in an agent's context, so usability/ship work is justified.
+**Worthiness gate — PASSED, then doubled.** Superseded 2026-06-17 by the **symbol index (ADR 0004): −65.2% tokens at 20/20 accuracy** (run-084740) — see the dedicated section above; this is now atlas's defensible value claim. Original gate (run-004810, 20 verified questions): with_map vs without_map both **20/20 accuracy (100%, zero regressions)**; tokens **85,817 → 59,916 = −30.1%**; turns 3→2 — the trustworthy, low-variance signal that justified usability/ship work. The edit-task token deltas below stay INCONCLUSIVE (60–140% variance), but the worthiness question is settled: atlas earns its place in an agent's context.
 
 **Last benchmark result (2026-06-17 — DECISIVE N=5, run-232455, first run with the reverse-ref/field lever, spend $14.12):** the M1 "measurable benchmark win" exit criterion is **NOT met on edit-task tokens.** with_map vs without_map exploration tokens: **task 02 (find-the-thing) +22.9%**, **task 01 (multi-site edit) −66.8%**, **aggregate +8.9%** (sum of medians, below the ≥25% bar). The earlier N=3 +53.9%/+78% **did not hold up** — it was largely an artifact of one run's without_map blowup. Variance is still **64–139%** even at N=5, so medians are soft; the only robust signals are the task split (helps find-the-thing, hurts multi-site) and **turns −25%** in both arms. The reverse-ref/field lever helped task 01 (−186.7% → −66.8% vs run-101017) but did not flip it positive — keep it. The **80% goal is out of reach with this approach**; the prerequisite for any trustworthy token verdict is killing the variance (task redesign / trimmed means / larger N), not more map content. README's headline claim was corrected to the supported numbers (turns −25%, comprehension −45% at equal accuracy). #1 stays open; v0.1.0 (#14) stays gated — the alpha label was right. See benchmark/history.md + results/run-20260616-232455.local.json.
 

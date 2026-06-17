@@ -70,8 +70,11 @@ if [ ! -d "$cache/.git" ]; then
 fi
 
 map_file="$(pwd)/.work/comprehension-map.md"
+# COMP_MAP_BUDGET: token budget for the injected map (default 2048 — the shipped
+# default). A richer map surfaces more answers directly, so the agent answers
+# from context instead of grepping (fewer turns = fewer tokens); tune via env.
 case " $BENCH_ARMS " in
-  *" with_map "*) "$ATLAS_BIN" "$cache" > "$map_file" ;;
+  *" with_map "*) "$ATLAS_BIN" "$cache" --budget "${COMP_MAP_BUDGET:-2048}" > "$map_file" ;;
 esac
 
 stamp="$(date +%Y%m%d-%H%M%S)"

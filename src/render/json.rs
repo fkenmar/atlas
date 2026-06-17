@@ -1,6 +1,9 @@
 //! JSON renderer — stable, versioned schema for programmatic consumers
-//! (PRD §7.3). Any change to the output shape bumps `SCHEMA_VERSION` and,
-//! pre-1.0, the crate minor version (see the release-process skill).
+//! (PRD §7.3). A *breaking* shape change — removing, renaming, or retyping an
+//! existing field — bumps `SCHEMA_VERSION` and, pre-1.0, the crate minor
+//! version (see the release-process skill). Purely *additive* keys (e.g.
+//! `symbol_index`, ADR 0004) don't: consumers ignore unknown keys, so the
+//! version still means "every field you knew about is still here, unchanged".
 //!
 //! Serialized by hand (no serde dependency yet — added with the MCP server in
 //! M2): the schema is small and fixed, and hand-rolling keeps the dependency
@@ -32,6 +35,18 @@ pub fn render(map: &BudgetedMap) -> String {
         .iter()
         .map(|c| format!("{{\"dir\": {}, \"count\": {}}}", json_str(&c.dir), c.count))
         .collect();
+    let symbol_index: Vec<String> = map
+        .symbol_index
+        .iter()
+        .map(|s| {
+            format!(
+                "{{\"name\": {}, \"kind\": {}, \"path\": {}}}",
+                json_str(&s.name),
+                json_str(kind_name(s.kind)),
+                json_str(&s.rel)
+            )
+        })
+        .collect();
 
     let mut out = String::new();
     out.push_str("{\n");
@@ -52,6 +67,11 @@ pub fn render(map: &BudgetedMap) -> String {
     );
     let _ = writeln!(out, "  \"files\": [{}],", join_indented(&files, 4));
     let _ = writeln!(out, "  \"collapsed\": [{}],", join_indented(&collapsed, 4));
+    let _ = writeln!(
+        out,
+        "  \"symbol_index\": [{}],",
+        join_indented(&symbol_index, 4)
+    );
     let _ = writeln!(
         out,
         "  \"skipped_files\": {}, \"unwired_files\": {}",
@@ -162,7 +182,7 @@ fn json_str(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::budget::CollapsedDir;
+    use crate::budget::{CollapsedDir, IndexedSymbol};
 
     fn sample_map() -> BudgetedMap {
         BudgetedMap {
@@ -195,6 +215,11 @@ mod tests {
                 dir: "tests".to_string(),
                 count: 4,
             }],
+            symbol_index: vec![IndexedSymbol {
+                name: "Widget".to_string(),
+                kind: SymbolKind::Class,
+                rel: "src/widget.py".to_string(),
+            }],
             skipped_files: 1,
             unwired_files: 2,
         }
@@ -211,6 +236,9 @@ mod tests {
         assert!(json.contains("\"kind\": \"method\", \"name\": \"login\""));
         assert!(json.contains("\"line\": 12, \"visibility\": \"public\""));
         assert!(json.contains("\"dir\": \"tests\", \"count\": 4"));
+        assert!(
+            json.contains("\"name\": \"Widget\", \"kind\": \"class\", \"path\": \"src/widget.py\"")
+        );
         assert!(json.contains("\"skipped_files\": 1, \"unwired_files\": 2"));
     }
 
@@ -229,8 +257,10 @@ mod tests {
         let mut map = sample_map();
         map.files.clear();
         map.collapsed.clear();
+        map.symbol_index.clear();
         let json = render(&map);
         assert!(json.contains("\"files\": [],"));
         assert!(json.contains("\"collapsed\": [],"));
+        assert!(json.contains("\"symbol_index\": [],"));
     }
 }

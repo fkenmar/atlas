@@ -1,0 +1,31 @@
+# Smoke set — 3 "hard" questions whose answers are NOT in the default 2048 map
+# (the agent had to grep for them at budget 2048). Used to A/B whether a richer
+# map lets the agent answer from context instead. Verified answers.
+repo:
+  url: https://github.com/pytest-dev/pytest
+  rev: 8.2.0
+questions:
+  - id: monkeypatch-class
+    question: >
+      Which class implements the monkeypatch fixture, and which module
+      defines it?
+    match: all
+    expect:
+      - "MonkeyPatch"
+      - "monkeypatch"
+  - id: capture-manager
+    question: >
+      What class manages output capturing for the capture plugin, and which
+      module defines it?
+    match: all
+    expect:
+      - "CaptureManager"
+      - "_pytest/capture.py"
+  - id: callinfo-class
+    question: >
+      Which class captures the result and timing of a single test phase
+      call (setup/call/teardown), and which file defines it?
+    match: all
+    expect:
+      - "CallInfo"
+      - "_pytest/runner.py"
