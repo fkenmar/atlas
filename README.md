@@ -55,7 +55,15 @@ Files are ordered by importance (a PageRank over the import graph), `#1` being t
 
 ## Install
 
-From source (you'll need [Rust](https://rustup.rs)):
+**Prebuilt binary** — no Rust required (macOS & Linux):
+
+```
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fkenmar/atlas/releases/download/v0.1.0-alpha/atlas-installer.sh | sh
+```
+
+On Windows, grab `atlas-x86_64-pc-windows-msvc.zip` from the [releases page](https://github.com/fkenmar/atlas/releases). Binaries for all platforms (x64 + arm64) are attached to every release by [cargo-dist](https://opensource.axo.dev/cargo-dist/).
+
+**From source** — any platform, needs [Rust](https://rustup.rs):
 
 ```
 git clone https://github.com/fkenmar/atlas
@@ -63,7 +71,9 @@ cd atlas
 cargo install --path .
 ```
 
-This builds `atlas` into `~/.cargo/bin` — make sure that's on your `PATH` (rustup sets this up by default). Verify and take it for a spin:
+This builds `atlas` into `~/.cargo/bin` — make sure that's on your `PATH` (rustup sets this up by default).
+
+Either way, verify and take it for a spin:
 
 ```
 atlas --version
@@ -72,8 +82,6 @@ atlas .
 ```
 
 You should see a `# atlas: …` header followed by a list of ranked files. That's the whole tool.
-
-> Prebuilt binaries and a one-line installer for macOS, Linux, and Windows are attached to each tagged [release](https://github.com/fkenmar/atlas/releases) by [cargo-dist](https://opensource.axo.dev/cargo-dist/).
 
 ---
 
