@@ -102,7 +102,12 @@ atlas . --focus src/auth         # rank the files you're working on higher
 atlas . --lang py,rs             # only these languages
 atlas . --no-private             # public API surface only
 atlas . --format json            # JSON instead of Markdown
+atlas . --color always           # force ANSI color (auto-detects a terminal otherwise)
 ```
+
+When you run atlas in a terminal the Markdown map is colorized for scannability; piped or redirected output stays plain, so feeding it to an agent or a file is unaffected (`--color never` to disable, `NO_COLOR` is honored).
+
+**Shell completions:** `atlas --completions <bash|zsh|fish|powershell|elvish>` prints a completion script — e.g. `atlas --completions zsh > ~/.zfunc/_atlas`.
 
 By default atlas aims for a 2,048-token budget. When a repo doesn't fit, it degrades in steps rather than truncating: it drops private symbols (the header shows `public-only`), then elides parameter detail, then collapses the lowest-ranked files to a single line. Raise `--budget` for more detail, or use `--focus` to protect the paths you care about.
 

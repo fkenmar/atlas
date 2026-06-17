@@ -3,9 +3,11 @@
 //! only) subcommand is the implicit `map`; `serve`/`diff` land in later
 //! milestones.
 
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use clap_complete::Shell;
 
 use crate::budget::{BudgetOptions, TiktokenCounter, DEFAULT_BUDGET};
 use crate::lang::Language;
@@ -18,6 +20,7 @@ EXAMPLES:
   atlas . --no-private         Public API surface only
   atlas . --format json        Emit JSON instead of Markdown
   atlas . > map.md             Save the map (e.g. to feed an agent)
+  atlas --completions zsh      Print a shell completion script (bash/zsh/fish/…)
 
 Pipe the output into your AI coding agent's context so it can navigate the repo
 without reading every file. Docs: https://github.com/fkenmar/atlas";
@@ -58,6 +61,26 @@ pub struct Cli {
     /// Public API surface only — drop private symbols.
     #[arg(long)]
     pub no_private: bool,
+
+    /// Colorize Markdown output: auto (default, only when writing to a
+    /// terminal), always, or never. Piped output is never colored.
+    #[arg(long, value_enum, default_value_t = Color::Auto, value_name = "WHEN")]
+    pub color: Color,
+
+    /// Print a shell completion script to stdout and exit, e.g.
+    /// `atlas --completions zsh > ~/.zfunc/_atlas`.
+    #[arg(long, value_name = "SHELL")]
+    pub completions: Option<Shell>,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Color {
+    /// Color only when stdout is a terminal (and `NO_COLOR` is unset).
+    Auto,
+    /// Always color, even when piped.
+    Always,
+    /// Never color.
+    Never,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,6 +101,14 @@ pub fn run() {
 }
 
 fn run_with(cli: Cli) -> Result<(), i32> {
+    // `--completions <shell>`: print the script and exit before doing any work,
+    // so it's usable in any context (no repo needed).
+    if let Some(shell) = cli.completions {
+        let mut cmd = Cli::command();
+        clap_complete::generate(shell, &mut cmd, "atlas", &mut std::io::stdout());
+        return Ok(());
+    }
+
     if cli.budget == 0 {
         eprintln!("atlas: --budget must be at least 1 token (the default is {DEFAULT_BUDGET})");
         return Err(2);
@@ -171,10 +202,29 @@ fn run_with(cli: Cli) -> Result<(), i32> {
     );
 
     match cli.format {
-        Format::Md => print!("{}", crate::render::markdown::render(&map)),
+        Format::Md => {
+            let md = crate::render::markdown::render(&map);
+            if should_color(cli.color) {
+                print!("{}", crate::render::color::colorize(&md));
+            } else {
+                print!("{md}");
+            }
+        }
+        // JSON is structured data for programmatic consumers — never colorized.
         Format::Json => print!("{}", crate::render::json::render(&map)),
     }
     Ok(())
+}
+
+/// Decide whether to ANSI-colorize Markdown output. `auto` colors only when
+/// stdout is a terminal and `NO_COLOR` (https://no-color.org) is unset; an
+/// explicit `--color always` overrides both.
+fn should_color(when: Color) -> bool {
+    match when {
+        Color::Always => true,
+        Color::Never => false,
+        Color::Auto => std::env::var_os("NO_COLOR").is_none() && std::io::stdout().is_terminal(),
+    }
 }
 
 /// Parse a `--lang py,rs` CSV into languages; unknown extensions are an error.
@@ -315,6 +365,20 @@ mod tests {
         assert_eq!(cli.budget, 512);
         assert_eq!(cli.format, Format::Json);
         assert_eq!(cli.lang.as_deref(), Some("rs"));
+    }
+
+    #[test]
+    fn color_and_completions_parse() {
+        assert_eq!(parse(&["atlas"]).color, Color::Auto);
+        assert_eq!(parse(&["atlas", "--color", "never"]).color, Color::Never);
+        assert_eq!(parse(&["atlas", "--color", "always"]).color, Color::Always);
+        assert!(parse(&["atlas"]).completions.is_none());
+        assert_eq!(
+            parse(&["atlas", "--completions", "zsh"]).completions,
+            Some(Shell::Zsh)
+        );
+        // An unknown shell is rejected.
+        assert!(Cli::try_parse_from(["atlas", "--completions", "tcsh"]).is_err());
     }
 
     #[test]

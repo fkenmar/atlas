@@ -33,6 +33,21 @@ Format: `- **idea** — why it's parked (date)`
   (no model shipped, output stays byte-deterministic) is the only RL-adjacent idea
   worth a future look, and only after the suite is trustworthy (#1, #6).
 
+- **Interactive TUI for browsing the map** — proposed 2026-06-17 to "increase
+  accessibility." Parked: it optimizes the wrong consumer. atlas's output is built
+  for an *LLM agent's context* (`atlas . > map.md` → fed to the agent), not for a
+  human to sit and browse — so a full-screen interactive UI doesn't lower the
+  barrier to the actual workflow, it adds a human-facing surface the workflow
+  doesn't use. It also leans against the **"CLI and MCP only — no IDE plugins or
+  GUI"** non-goal (PRD §3.2) in spirit, and a browse-the-symbols TUI drifts toward
+  the **LSP/IDE code-intelligence** non-goal too. Cost is real: ratatui + crossterm
+  (new deps, approval-gated), a whole interaction layer to maintain on a solo
+  ~10 hr/week alpha, competing with the roadmap. **The in-scope way to "make atlas
+  easy to use" is the MCP server (#7)** — that's how an agent pulls a fresh map as a
+  tool call (zero human friction), plus CLI-native polish (TTY-aware colorized
+  output, shell completions) that stays a pipe, not an app. Revisit only if real
+  users ask to *inspect* maps by hand and the MCP/CLI path has shipped.
+
 ## Tried and reverted
 
 The self-improvement loop (docs/SELF_IMPROVEMENT.md) appends reverted

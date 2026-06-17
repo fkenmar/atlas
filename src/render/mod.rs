@@ -5,6 +5,7 @@
 //! sorted collections only — BTreeMap or an explicit sort before emit,
 //! never HashMap iteration order.
 
+pub mod color;
 pub mod json;
 pub mod markdown;
 

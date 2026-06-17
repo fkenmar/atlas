@@ -34,6 +34,7 @@ tree-sitter-typescript = "0.23.2"
 tree-sitter-rust = "0.24.2"
 tiktoken-rs = "0.12.0"
 clap = { version = "4.6.1", features = ["derive"] }
+clap_complete = "4.6"
 bincode = { version = "2.0", features = ["derive"] }
 
 # The profile that 'dist' will build with

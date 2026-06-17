@@ -8,6 +8,17 @@ benchmark delta.
 
 ## [Unreleased]
 
+### Added
+- **Colorized terminal output.** When stdout is a terminal, the Markdown map is
+  ANSI-colorized for scannability — bold-cyan header, bold-blue file paths, dim
+  rank/dependency/footer detail, tinted declaration keywords. It's a display-only
+  layer: **piped output stays plain** (so feeding the map to an agent or a file
+  is unaffected), and the token count/determinism are untouched. Controlled by
+  `--color auto|always|never` (default `auto`); honors the `NO_COLOR` convention.
+- **Shell completions.** `atlas --completions <bash|zsh|fish|powershell|elvish>`
+  prints a completion script to stdout (e.g. `atlas --completions zsh >
+  ~/.zfunc/_atlas`). Adds the `clap_complete` dependency.
+
 ## [0.2.0-alpha] - 2026-06-17
 
 Second alpha. Headline: the **symbol index** more than doubles the comprehension
