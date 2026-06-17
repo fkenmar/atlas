@@ -1,0 +1,41 @@
+# pip/pipx distribution for the `atlas` CLI.
+#
+# atlas is a Rust binary, not a Python package — this file exists only so
+# maturin can wrap the compiled binary into a platform wheel (`bindings = "bin"`,
+# the same pattern ruff/uv/ast-grep use). No Python runs at execution time; the
+# wheel just drops the native `atlas` binary onto the environment's PATH. The
+# PyPI distribution name is `atlas-map` (the bare `atlas` was taken); the
+# installed command stays `atlas`. Build/publish runs in .github/workflows/pypi.yml.
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "atlas-map"
+description = "Compile a codebase into a token-budgeted structural map for LLM coding agents"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+keywords = ["llm", "tree-sitter", "code-map", "tokens", "agent", "repo-map"]
+authors = [{ name = "Kenmar" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Build Tools",
+]
+# Version is sourced from Cargo.toml by maturin (single source of truth).
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/fkenmar/atlas"
+Repository = "https://github.com/fkenmar/atlas"
+Changelog = "https://github.com/fkenmar/atlas/blob/main/CHANGELOG.md"
+
+[tool.maturin]
+# Wrap the compiled binary as a wheel script (no Python bindings).
+bindings = "bin"
+manifest-path = "Cargo.toml"

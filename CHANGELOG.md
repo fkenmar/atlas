@@ -9,6 +9,19 @@ benchmark delta.
 ## [Unreleased]
 
 ### Added
+- **pip / pipx distribution (`pip install atlas-map`).** atlas now ships as a
+  PyPI wheel so the Python-native audience (aider/Claude-Code/Cursor users) can
+  install it without a Rust toolchain or a `curl | sh`, and reach it on Windows
+  and in locked-down/corp environments where the shell installer doesn't work.
+  The wheel wraps the same compiled binary via maturin `bindings = "bin"` (no
+  Python runs at execution time; the `atlas` command lands on PATH); a new
+  `.github/workflows/pypi.yml` builds the five platform wheels + an sdist
+  fallback and publishes via PyPI Trusted Publishing (OIDC) on each release tag.
+  Distribution name is `atlas-map` (bare `atlas` was taken); the command stays
+  `atlas`. Additive — cargo-dist's `curl | sh`, archives, and `cargo install`
+  are unchanged. *Maintainer one-time setup before first publish: add the PyPI
+  Trusted Publisher (project `atlas-map`, repo `fkenmar/atlas`, workflow
+  `pypi.yml`, environment `pypi`).*
 - **Symbol index for the collapsed tail (ADR 0004).** When files overflow the
   budget, atlas now lists the *names* of the collapsed files' types — a compact
   `path: ClassA, ClassB` index — instead of erasing them into a bare directory

@@ -1,0 +1,139 @@
+# Build and publish pip wheels for the `atlas` CLI to PyPI (project: atlas-map).
+#
+# Separate from release.yml (which is cargo-dist-generated — do not hand-edit
+# that one). This wraps the compiled Rust binary into platform wheels via
+# maturin `bindings = "bin"` (config in pyproject.toml) and publishes them with
+# PyPI Trusted Publishing (OIDC — no API token). Runs on the same release tags
+# as cargo-dist, so a tagged release ships both the GitHub binaries and the
+# wheels. The binary, not Python, is what runs — the wheel just puts `atlas` on
+# the user's PATH.
+#
+# One-time setup the maintainer must do on PyPI (https://pypi.org/manage/account/publishing/):
+#   add a "pending publisher" -> project: atlas-map, owner: fkenmar,
+#   repo: atlas, workflow: pypi.yml, environment: pypi
+# (and optionally create a GitHub environment named `pypi` for protection rules).
+name: PyPI
+
+on:
+  push:
+    tags:
+      - '**[0-9]+.[0-9]+.[0-9]+*'
+  # Build-only sanity check when the build config changes (never publishes).
+  pull_request:
+    paths:
+      - 'pyproject.toml'
+      - '.github/workflows/pypi.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'src/**'
+      - 'queries/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          # manylinux2014 floor (Rust needs glibc >= 2.17); cross-compiles
+          # aarch64 in a manylinux container.
+          manylinux: auto
+          args: --release --locked --out dist
+          sccache: 'true'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.target }}
+          path: dist
+
+  macos:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+          - runner: macos-13
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --locked --out dist
+          sccache: 'true'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.target }}
+          path: dist
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x86_64-pc-windows-msvc
+          args: --release --locked --out dist
+          sccache: 'true'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-x86_64-pc-windows-msvc
+          path: dist
+
+  sdist:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-22.04
+    needs: [linux, macos, windows, sdist]
+    # Only real tags publish; PR/dispatch builds stop after the wheel jobs.
+    if: startsWith(github.ref, 'refs/tags/')
+    environment:
+      name: pypi
+      url: https://pypi.org/p/atlas-map
+    permissions:
+      id-token: write # OIDC token for Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist

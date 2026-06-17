@@ -55,6 +55,14 @@ Files are ordered by importance (a PageRank over the import graph), `#1` being t
 
 ## Install
 
+**pip / pipx** — for the Python crowd, no Rust required (lands with the next tagged release):
+
+```
+pipx install --pre atlas-map     # or: pip install --pre atlas-map
+```
+
+atlas is a Rust binary, not a Python package — the wheel just drops the native `atlas` command onto your PATH (the same way `ruff` and `uv` ship). The PyPI distribution is named `atlas-map` because `atlas` was taken; the command you run is still `atlas`. While atlas is in alpha the `--pre` flag is required.
+
 **Prebuilt binary** — no Rust required (macOS & Linux):
 
 ```

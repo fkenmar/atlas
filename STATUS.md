@@ -34,6 +34,28 @@ safe for real users / downloads:
 Gate green throughout (69 tests). Lower-priority audit items remain (always-on map legend,
 `-o/--output`, `--for-agent` preamble, shell completions [needs clap_complete dep approval]).
 
+## pip / pipx distribution (2026-06-17)
+
+`pip install atlas-map` / `pipx install atlas-map` — the Python-native audience (aider/Claude-Code/Cursor
+users) can now install atlas without a Rust toolchain or `curl | sh`, including on Windows and in
+locked-down/corp environments the shell installer can't reach. Decided after a 6-agent research workflow
+(pip = strong audience fit, conda = skip: narrow audience + heavy feedstock maintenance).
+- **How:** maturin `bindings = "bin"` wraps the *same* compiled binary into a platform wheel — no Python at
+  runtime, the `atlas` command just lands on PATH (the ruff/uv/ast-grep pattern). `pyproject.toml` +
+  `.github/workflows/pypi.yml` (5 platform wheels mirroring the cargo-dist triples + an sdist source
+  fallback), publishing via PyPI **Trusted Publishing (OIDC, no token)** on each release tag. Separate from
+  the cargo-dist-generated `release.yml`; strictly additive to curl|sh / archives / `cargo install`.
+- **Verified locally end-to-end:** `maturin build` → `atlas_map-0.1.0a0-py3-none-macosx_11_0_arm64.whl`;
+  fresh-venv `pip install` drops `atlas` on PATH; `atlas --version` + a real map both run; sdist includes
+  `Cargo.lock` + `queries/` so source-build fallback works.
+- **Dist name** is `atlas-map` (bare `atlas` taken on PyPI; verified `atlas-map`/`atlasmap`/`atlas-cli`
+  free); command stays `atlas`. Alpha ⇒ version normalizes to `0.1.0a0`, so users need `--pre` until a
+  stable `0.1.0`.
+- **⚠ Maintainer action required before the first publish works:** on PyPI, add a *pending Trusted
+  Publisher* — project `atlas-map`, owner `fkenmar`, repo `atlas`, workflow `pypi.yml`, environment `pypi`
+  (and create a GitHub environment named `pypi`). Until then the README's `pip install` line is staged, not
+  live; the wheels publish automatically on the next release tag once the publisher is configured.
+
 ## Symbol index — comprehension token win (2026-06-17, ADR 0004)
 
 **−65.2% tokens at 20/20 accuracy** on the comprehension benchmark (run-084740), at the
