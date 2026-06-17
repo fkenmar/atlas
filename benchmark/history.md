@@ -28,3 +28,17 @@ incl. cache; see benchmark/README.md).
 - **Trust:** variance is still 62–84% on 3 of 4 arms with only 3 clean runs — per-task numbers (esp. task 01) need **N≥5** to be stable. Denied-Bash thrashing (task-02 without_map ran 47–50 turns) is a candidate cause; relaxing it is a symmetric protocol change to consider.
 
 See benchmark/results/run-20260616-101017.local.json.
+
+---
+
+| 2026-06-17 | **N=5 confirmation + reverse-ref/field lever** (first run measuring the current map: `used by` edges + class fields — commits a42c7f9/144051b/d29a67d/0c846db; schema 3, exploration tokens, medians over passing non-capped, cap 45) | with_map vs without_map | t01: 651,823 vs 390,744 = **−66.8%** | t02: 1,638,447 vs 2,123,785 = **+22.9%** | 20/20 pass (1 t02 with_map capped) | aggregate **+8.9%** (sum of medians) — **FAILS the ≥25% bar**; variance 64–139% |
+
+**The decisive N=5 (run-20260616-232455, spend $14.12).** First measurement of the current map (reverse-dependency "used by" edges + class fields). Verdict: **no clear token win, and nowhere near the 80% goal.**
+- **Variance did NOT collapse at N=5.** without_map spreads are **139%** (t01) and **127%** (t02) of the median; the agent's run-to-run nondeterminism swings exploration 3–10× (t02 without_map ranged 784k → 3.5M). The medians are still soft — even N=5 doesn't pin this down.
+- **Aggregate +8.9%** (sum of medians) — below the ≥25% "measurable win" bar. The earlier N=3 **+53.9% / +78%** was largely an artifact of one run's without_map blowup (t02 without_map was 4.2M in run-101017 vs 2.1M here); it did not hold up.
+- **The robust signal is the task split:** the map helps "find the existing thing" (t02 **+22.9%**) and hurts "find all the sites" multi-site edits (t01 **−66.8%**).
+- **The reverse-ref/field lever helped t01** (with_map t01 went 1.21M @ −186.7% in run-101017 → 652k @ −66.8% here) but did **not** flip it positive — keep the features, but the denser map still costs more than it saves on multi-site, token-wise.
+- **Turns improve with the map in both tasks** (t01 22→17, t02 24→17, ≈ **−25%**): the map makes the agent more *turn*-efficient even where it isn't *token*-efficient.
+- **Bottom line for M1:** the "measurable benchmark win" exit criterion is **not met on edit-task tokens.** The defensible wins are **turns (−25%)** and **comprehension (−45% tokens at equal accuracy, earlier)**. The 80% token-reduction goal is out of reach with this approach. The benchmark's dominant problem is variance, not the map — stabilizing it (task redesign, trimmed means, larger N) is the prerequisite for any trustworthy token verdict.
+
+See benchmark/results/run-20260616-232455.local.json.

@@ -28,7 +28,7 @@
 
 When an AI coding agent works in your repo, it spends most of its effort just figuring out where things are: opening file after file to learn the layout. **atlas** does that once and hands the agent a single ~2,000-token map — every function signature, type, and import, ranked by importance, with no function bodies. The agent gets its bearings immediately and gets to work.
 
-In our benchmark, dropping an atlas map into the agent's context cut the tokens it spent exploring by **up to 78%** on "find the right code" tasks — with no loss of accuracy.
+In our benchmark, agents given an atlas map reached the right code in about **25% fewer turns** with no loss of accuracy, and answered questions about the codebase using **~45% fewer tokens** at the same accuracy. (Exploration-token savings on edit tasks are real but vary by task type — strongest when finding existing code, weaker on sprawling multi-site edits.)
 
 ## What it looks like
 
