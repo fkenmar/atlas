@@ -1,6 +1,6 @@
 [package]
 name = "atlas"
-version = "0.0.1"
+version = "0.1.0-alpha"
 edition = "2021"
 rust-version = "1.96"
 description = "Compile a codebase into a token-budgeted structural map for LLM coding agents"

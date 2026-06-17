@@ -1,12 +1,19 @@
 # Changelog
 
-All notable user-facing changes to repomap, grouped Added/Changed/Fixed per
+All notable user-facing changes to atlas, grouped Added/Changed/Fixed per
 release ([Keep a Changelog](https://keepachangelog.com/) style). Pre-1.0
 semver policy: JSON schema changes bump the minor version — see the
 release-process skill. Ranking/budgeting entries must include their
 benchmark delta.
 
 ## [Unreleased]
+
+## [0.1.0-alpha] - 2026-06-16
+
+First tagged pre-release. The renamed **atlas** binary with the full M1 pipeline
+(discover → parse → link → rank → budget → render) for Python / TypeScript-JS /
+Rust. **Pre-release:** the M1 "measurable benchmark win" exit criterion is not yet
+confirmed at N≥5 (tracked in #1); numbers below are from N=3 checkpoints.
 
 ### Changed
 - **Imports show resolved internal dependencies, not raw import strings.** The

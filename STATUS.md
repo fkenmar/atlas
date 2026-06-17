@@ -13,6 +13,27 @@ Next milestone: **M1 — Core (v0.1 alpha)**: TS/JS + Rust grammars; import link
 
 The full pipeline now runs end-to-end (`atlas [PATH] --budget --focus --lang --no-private --format md|json`). **All M1 functional requirements done:** FR-1 (TS+Rust grammars), FR-3/FR-11 (tiktoken `cl100k_base` budget + degradation ladder), FR-4 (personalized PageRank), FR-5 (md + json), FR-6 (bincode content-hash cache), FR-7 (`.gitignore`/`.atlasignore`), FR-12. **NFR-1 cold:** 0.25 s on pytest 92 k LOC (8× under the 2 s target; warm-path wall-clock verification still pending). **Remaining for M1 exit:** the *benchmark-shows-a-measurable-win* criterion (first fair with-map vs without-map checkpoint **in flight**), warm-path timing, optional rayon. Dogfood self-map of atlas's own source: 3.7 k LOC → ~1.4 k tokens at full detail. Quality fixes baked in: test-code excluded from extraction, ranking de-biased against symbol count, per-file one-line rung, language-aware visibility. Full history in CHANGELOG.md.
 
+## GitHub issue triage + NFR-1 warm path — 2026-06-16
+
+Filed the remaining roadmap as 14 GitHub issues (fkenmar/atlas) and organized them under
+milestones **M1 — Core** (#1–#6, #14), **M2 — Integration** (#7–#9, #13), **M3 — Breadth**
+(#10–#12). Triage outcome:
+
+- **#2 NFR-1 warm path — VERIFIED, closed.** Measured on pytest 8.2.0 (256 files / 92k LOC,
+  1.8× the 50k-LOC spec): **cold 668 ms** (clean run, atlas cache cleared, incl. render — 3×
+  under the 2 s target) → **warm median 83 ms** (min 82, max 87; n=7) — **8× speedup**, well
+  under the ≤200 ms warm target even at nearly 2× the spec repo size. Cache hit confirmed
+  (single bincode blob under `.atlas/cache`). NFR-1 now verified on **both** halves.
+- **#5 exploration-token metric — DONE, closed.** Already implemented (`metric.py` →
+  tokens-up-to-first-edit in `run.sh`) and documented in benchmark/README.md.
+- **#3 reverse-references — implementation DONE** (commits 144051b/d29a67d/0c846db = class
+  fields; a42c7f9 = `used by` edges); only the billed benchmark validation remains, folded
+  into #1.
+- **#1 (N≥5 win confirmation)** is the one decisive blocker — billed (~$3–5) and tied to the
+  paused 80% goal; left to the maintainer's go-ahead. **#14 release** gated on it.
+- **#4 rayon** deferred (new-dep gate; cold path already 3× under target, low value now).
+- M2/M3 epics (#7–#13) intentionally deferred behind M1 exit.
+
 ## Ship-prep + rename — 2026-06-16 (repomap → atlas)
 
 Renamed the project to **atlas** end-to-end (crate, binary, map header, CLI messages, cache dir `.repomap`→`.atlas`, ignore file `.atlasignore`) — the binary is now `atlas`, `cargo install --path .` works. Made it usable for a general audience: rewrote README (problem-first, real example output, simple install/usage), added MIT `LICENSE`, added `repository`/`readme`/`keywords`/`categories` to Cargo.toml, added 10 GitHub topics for discoverability. Gate green (68 tests, clippy clean). **80% token-reduction goal paused at the measured ~70%** per maintainer ("stop around 70% for now"); the N≥5 benchmark to confirm the aggregate remains the open decisive measurement when the goal resumes. Local git remote still points at the old `RepoBrain.git` (push works via GitHub redirect; rewrite to `atlas.git` is a one-liner the maintainer can run). A tagged `v0.1.0` GitHub release is the natural next shipping step (gated on the M1 benchmark-win criterion).
