@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="atlas">
+  <title>atlas</title>
+  <!-- A node-link graph that also reads as the letter "A":
+       apex + two feet joined by edges (the legs) and a crossbar.
+       The central hero node with the amber core is the rank #1 file —
+       the most-central node the map points an agent to first. -->
+  <g stroke="#3B6FF0" stroke-width="4.5" stroke-linecap="round">
+    <line x1="64" y1="24" x2="28" y2="102"/>
+    <line x1="64" y1="24" x2="100" y2="102"/>
+    <line x1="43" y1="70" x2="85" y2="70"/>
+  </g>
+  <g fill="#5B7BB0">
+    <circle cx="64" cy="24" r="9"/>
+    <circle cx="28" cy="102" r="9"/>
+    <circle cx="100" cy="102" r="9"/>
+  </g>
+  <circle cx="64" cy="70" r="13" fill="#3B6FF0"/>
+  <circle cx="64" cy="70" r="5.4" fill="#FFC24B"/>
+</svg>
