@@ -8,6 +8,13 @@ benchmark delta.
 
 ## [Unreleased]
 
+## [0.2.0-alpha] - 2026-06-17
+
+Second alpha. Headline: the **symbol index** more than doubles the comprehension
+token win (−65.2% at 20/20 accuracy), and atlas now installs via **pip/pipx**
+(`pip install --pre atlas-map`) alongside the existing `curl | sh` and `cargo
+install`.
+
 ### Added
 - **pip / pipx distribution (`pip install atlas-map`).** atlas now ships as a
   PyPI wheel so the Python-native audience (aider/Claude-Code/Cursor users) can

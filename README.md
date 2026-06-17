@@ -8,7 +8,7 @@
 
 <p>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-4F46E5?style=flat-square" alt="License: MIT"></a>
-  <a href="https://github.com/fkenmar/atlas/releases"><img src="https://img.shields.io/badge/release-v0.1.0--alpha-4F46E5?style=flat-square" alt="Release"></a>
+  <a href="https://github.com/fkenmar/atlas/releases"><img src="https://img.shields.io/badge/release-v0.2.0--alpha-4F46E5?style=flat-square" alt="Release"></a>
   <a href="https://github.com/fkenmar/atlas/actions/workflows/ci.yml"><img src="https://github.com/fkenmar/atlas/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/built%20with-Rust-DEA584?style=flat-square&logo=rust&logoColor=white" alt="Built with Rust"></a>
   <img src="https://img.shields.io/badge/languages-Py%20%C2%B7%20TS%20%C2%B7%20Rust-F59E0B?style=flat-square" alt="Languages: Py · TS · Rust">
@@ -55,7 +55,7 @@ Files are ordered by importance (a PageRank over the import graph), `#1` being t
 
 ## Install
 
-**pip / pipx** — for the Python crowd, no Rust required (lands with the next tagged release):
+**pip / pipx** — for the Python crowd, no Rust required:
 
 ```
 pipx install --pre atlas-map     # or: pip install --pre atlas-map
@@ -66,7 +66,7 @@ atlas is a Rust binary, not a Python package — the wheel just drops the native
 **Prebuilt binary** — no Rust required (macOS & Linux):
 
 ```
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fkenmar/atlas/releases/download/v0.1.0-alpha/atlas-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fkenmar/atlas/releases/download/v0.2.0-alpha/atlas-installer.sh | sh
 ```
 
 On Windows, grab `atlas-x86_64-pc-windows-msvc.zip` from the [releases page](https://github.com/fkenmar/atlas/releases). Binaries for all platforms (x64 + arm64) are attached to every release by [cargo-dist](https://opensource.axo.dev/cargo-dist/).
