@@ -88,3 +88,83 @@ questions:
     expect:
       - "import_path"
       - "pathlib"
+  - id: session-class
+    question: >
+      What class represents the whole test session (the root of the
+      collection tree), and which module defines it?
+    match: all
+    expect:
+      - "Session"
+      - "_pytest/main"
+  - id: fixture-request-class
+    question: >
+      What is the name of the request object passed into fixtures, and
+      which file defines it?
+    match: all
+    expect:
+      - "FixtureRequest"
+      - "_pytest/fixtures.py"
+  - id: skip-exception
+    question: >
+      Which exception class does pytest.skip() raise, and which module
+      defines it?
+    match: all
+    expect:
+      - "Skipped"
+      - "outcomes"
+  - id: node-base-class
+    question: >
+      What is the base class for pytest's collection-tree nodes (Items and
+      Collectors), and which module defines it?
+    match: all
+    expect:
+      - "Node"
+      - "_pytest/nodes.py"
+  - id: argparsing-parser
+    question: >
+      Which class builds pytest's command-line argument parser, and which
+      module defines it?
+    match: all
+    expect:
+      - "Parser"
+      - "argparsing"
+  - id: callinfo-class
+    question: >
+      Which class captures the result and timing of a single test phase
+      call (setup/call/teardown), and which file defines it?
+    match: all
+    expect:
+      - "CallInfo"
+      - "_pytest/runner.py"
+  - id: capture-manager
+    question: >
+      What class manages output capturing for the capture plugin, and which
+      module defines it?
+    match: all
+    expect:
+      - "CaptureManager"
+      - "_pytest/capture.py"
+  - id: monkeypatch-class
+    question: >
+      Which class implements the monkeypatch fixture, and which module
+      defines it?
+    match: all
+    expect:
+      - "MonkeyPatch"
+      - "monkeypatch"
+  - id: test-report-class
+    question: >
+      What class represents the report of a single test phase, and which
+      module defines it?
+    match: all
+    expect:
+      - "TestReport"
+      - "_pytest/reports.py"
+  - id: exitcode-enum
+    question: >
+      Which enum holds pytest's process exit codes, and which module
+      defines it?
+    match: all
+    expect:
+      - "ExitCode"
+      - "_pytest/config"

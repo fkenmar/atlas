@@ -35,6 +35,17 @@ The **old M0 proxy** was total input-side tokens across the *whole* session plus
 - Compare like with like: same model, same pinned repo rev, same task set, **and the same metric generation** (results `schema_version` / `metric` must match the baseline's — the exploration metric is not comparable to the old whole-session proxy). Changing any of those means re-recording the baseline, not comparing across it.
 - Local results go to `results/run-<stamp>.local.json` (gitignored); the recorded no-map baseline lives in `baseline.json`.
 
+### What this suite can and can't claim (variance reality — settled 2026-06-17, N=5)
+
+The N=5 run (history.md) is decisive: **edit-task `exploration_tokens` is too noisy to support a quantified claim.** Across N=5 the `without_map` arm swings **127–139%** around its median (one task ranged 784k → 3.5M tokens), and *turns* and *msgs-to-edit* are no calmer (2–5× per-run swings). The agent's nondeterministic path, not the map, dominates the number. Therefore:
+
+- **Edit-task token deltas are reported, not claimed.** Any aggregate whose passing-run spread exceeds ~30% is **INCONCLUSIVE** — record it, never headline it. The +78% / +53.9% from the N=3 run did **not** survive N=5 (it was one lucky `without_map` blowup); treat single-run extremes as noise, not signal.
+- **The comprehension benchmark is the primary worthiness gate.** Constrained "locate the structural element" Q&A (20 verified questions) is low-variance and tests the value prop directly: does the map let the agent answer *as accurately* using *fewer tokens*? A download-worthy claim rests here (accuracy held at materially fewer tokens), **not** on edit-task token medians.
+- **Turns is a secondary, still-soft signal** — directionally the map cuts turns ~25%, but the per-run spread means cite it as a tendency, not a number.
+- **To make the edit benchmark claim-worthy:** lower-variance task design + a bigger suite (10+ tasks) + trimmed-mean statistics. Until then it *characterizes behavior* (helps find-the-thing, hurts multi-site edits) — it does not *quantify* a win.
+
+No public / README / marketing token-reduction number ships without a result that clears this gate.
+
 ## Files
 
 - `run.sh` — the runner (real headless execution since M0). For each task it shallow-clones the pinned repo into `.work/cache/`, copies a fresh working tree per run, drives `claude -p` (model/runs/turn-cap via `BENCH_MODEL`/`BENCH_RUNS`/`BENCH_MAX_TURNS`), records tokens/turns/cost, and evaluates the task's `success.cmd`. The `with_map` arm exists but is off by default until budgeting lands (M1) — injecting the unbudgeted naive map would not be a fair or realistic arm. Requires: `claude` CLI (logged in), git, jq, python3 + PyYAML.
