@@ -8,6 +8,17 @@ benchmark delta.
 
 ## [Unreleased]
 
+## [0.2.1-alpha] - 2026-06-17
+
+Terminal polish, and the fix that makes the pip publish actually land.
+
+### Fixed
+- **PyPI macOS x86_64 wheel.** The publish pipeline stalled on v0.2.0-alpha: the
+  `macos-13` runner that built the Intel-macOS wheel sat queued indefinitely
+  (the runner is being deprecated), blocking the publish job. Both macOS wheels
+  now build on the `macos-14` (arm64) runner — x86_64 via cross-compile (Apple's
+  SDK is universal) — so `pip install --pre atlas-map` publishes reliably.
+
 ### Added
 - **Colorized terminal output.** When stdout is a terminal, the Markdown map is
   ANSI-colorized for scannability — bold-cyan header, bold-blue file paths, dim
