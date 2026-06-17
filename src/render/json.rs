@@ -172,6 +172,7 @@ mod tests {
             total_loc: 5000,
             total_files: 12,
             detail: Detail::Full,
+            requested_no_private: false,
             files: vec![BudgetedFile {
                 rel: "src/auth.py".to_string(),
                 lang: "python",

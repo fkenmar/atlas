@@ -98,7 +98,7 @@ atlas . --format json            # JSON instead of Markdown
 
 By default atlas aims for a 2,048-token budget. When a repo doesn't fit, it degrades in steps rather than truncating: it drops private symbols (the header shows `public-only`), then elides parameter detail, then collapses the lowest-ranked files to a single line. Raise `--budget` for more detail, or use `--focus` to protect the paths you care about.
 
-atlas caches parse results in a `.atlas/` directory at the repo root so re-runs are fast — add `.atlas/` to your `.gitignore`.
+atlas caches parse results in a `.atlas/` directory at the repo root so re-runs are fast. It self-ignores (atlas writes `.atlas/.gitignore`), so it won't clutter your `git status`.
 
 Pipe the output straight into your agent's context, or save it to a file:
 

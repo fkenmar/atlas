@@ -110,6 +110,14 @@ impl Cache {
         };
         if let Some(parent) = self.path.parent() {
             let _ = std::fs::create_dir_all(parent);
+            // Self-ignore the cache dir so it never shows up in the user's
+            // `git status` — the standard tool-cache pattern, no edit to their
+            // root .gitignore required. Best-effort; don't clobber an existing
+            // file.
+            let gitignore = parent.join(".gitignore");
+            if !gitignore.exists() {
+                let _ = std::fs::write(&gitignore, "*\n");
+            }
         }
         let _ = std::fs::write(&self.path, bytes);
     }

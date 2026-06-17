@@ -24,10 +24,21 @@ impl super::Renderer for MarkdownRenderer {
 /// budget stage, to measure exact token counts of candidate maps.
 pub fn render(map: &BudgetedMap) -> String {
     let mut out = String::new();
-    let degraded = match map.detail {
-        Detail::Full => "",
-        Detail::NoPrivate => " | public-only",
-        Detail::NoParams => " | public-only, params elided",
+    // Word the header honestly: when the user asked for `--no-private` say so;
+    // when the budget forced symbols out, name the action and the lever
+    // (`--budget`) instead of the cryptic bare "public-only".
+    let degraded = match (map.detail, map.requested_no_private) {
+        (Detail::Full, _) => "",
+        (Detail::NoPrivate, true) => " | public API only (--no-private)",
+        (Detail::NoPrivate, false) => {
+            " | private symbols omitted to fit budget — raise --budget for full detail"
+        }
+        (Detail::NoParams, true) => {
+            " | public API only, parameter names omitted to fit budget — raise --budget"
+        }
+        (Detail::NoParams, false) => {
+            " | private symbols + parameter names omitted to fit budget — raise --budget"
+        }
     };
     let _ = writeln!(
         out,

@@ -106,6 +106,9 @@ pub struct BudgetedMap {
     pub total_files: usize,
     /// Global detail level applied (ladder rungs 1–2).
     pub detail: Detail,
+    /// Whether `--no-private` was user-requested (vs. the budget forcing
+    /// private symbols out) — lets the renderer word the header honestly.
+    pub requested_no_private: bool,
     /// Included files, in rank order.
     pub files: Vec<BudgetedFile>,
     /// Low-rank files dropped to the footer, grouped by directory and sorted.
@@ -189,6 +192,7 @@ pub fn pack<T: Tokenizer>(
         total_loc: stats.total_lines,
         total_files: stats.parsed_files,
         detail: Detail::Full,
+        requested_no_private: opts.no_private,
         files: Vec::new(),
         collapsed: Vec::new(),
         skipped_files: stats.skipped_files,
@@ -701,6 +705,7 @@ fn clone_base(base: &BudgetedMap) -> BudgetedMap {
         total_loc: base.total_loc,
         total_files: base.total_files,
         detail: base.detail,
+        requested_no_private: base.requested_no_private,
         files: Vec::new(),
         collapsed: Vec::new(),
         skipped_files: base.skipped_files,
