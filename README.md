@@ -8,8 +8,8 @@
 
 <p>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-4F46E5?style=flat-square" alt="License: MIT"></a>
-  <a href="https://github.com/fkenmar/atlas/releases"><img src="https://img.shields.io/github/v/release/fkenmar/atlas?include_prereleases&style=flat-square&color=4F46E5" alt="Release"></a>
-  <a href="https://github.com/fkenmar/atlas/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/fkenmar/atlas/ci.yml?style=flat-square&label=CI" alt="CI"></a>
+  <a href="https://github.com/fkenmar/atlas/releases"><img src="https://img.shields.io/badge/release-v0.1.0--alpha-4F46E5?style=flat-square" alt="Release"></a>
+  <a href="https://github.com/fkenmar/atlas/actions/workflows/ci.yml"><img src="https://github.com/fkenmar/atlas/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/built%20with-Rust-DEA584?style=flat-square&logo=rust&logoColor=white" alt="Built with Rust"></a>
   <img src="https://img.shields.io/badge/languages-Py%20%C2%B7%20TS%20%C2%B7%20Rust-F59E0B?style=flat-square" alt="Languages: Py · TS · Rust">
 </p>
