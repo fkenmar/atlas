@@ -19,7 +19,7 @@
   <a href="#use"><b>Use</b></a> ·
   <a href="#use-it-with-your-ai-agent"><b>Use it with your agent</b></a> ·
   <a href="#why-it-works"><b>Why it works</b></a> ·
-  <a href="#project-status"><b>Status</b></a>
+  <a href="#troubleshooting"><b>Troubleshooting</b></a>
 </sub>
 
 </div>
@@ -32,7 +32,7 @@ In our benchmark, dropping an atlas map into the agent's context cut the tokens 
 
 ## What it looks like
 
-Point atlas at a folder and it prints a map like this:
+Run `atlas src --budget 600` on this repo and it prints:
 
 ```
 # atlas: src (3740 LOC, 16 files) | budget 600 | rendered 585 tok
@@ -47,7 +47,9 @@ imports: parse.rs
 used by: parse.rs
 ```
 
-Files are ordered by importance (a PageRank over the import graph), `#1` being the most central. Each file shows its public symbols, what it imports, and what depends on it — everything an agent needs to navigate, nothing it doesn't. The whole thing is packed to fit your token budget.
+Files are ordered by importance (a PageRank over the import graph), `#1` being the most central. Each file shows its public symbols, what it imports, and what depends on it — everything an agent needs to navigate, nothing it doesn't. The header reports the budget and the actual `rendered` token count.
+
+**What it maps:** Python (`.py`, `.pyi`), TypeScript/JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, …), and Rust (`.rs`). It honors your `.gitignore` and an optional `.atlasignore`, and always skips hidden directories and common vendored/build folders (`node_modules`, `target`, `dist`, `build`, `venv`, `__pycache__`, `vendor`, …). If a file you expected isn't there, it's almost always an unsupported language or a skipped directory.
 
 ---
 
@@ -61,9 +63,17 @@ cd atlas
 cargo install --path .
 ```
 
-This puts the `atlas` command on your PATH. Check it with `atlas --version`.
+This builds `atlas` into `~/.cargo/bin` — make sure that's on your `PATH` (rustup sets this up by default). Verify and take it for a spin:
 
-> Prebuilt binaries and a one-line installer for macOS, Linux, and Windows are produced for each tagged [release](https://github.com/fkenmar/atlas/releases) by [cargo-dist](https://opensource.axo.dev/cargo-dist/).
+```
+atlas --version
+cd path/to/your/project
+atlas .
+```
+
+You should see a `# atlas: …` header followed by a list of ranked files. That's the whole tool.
+
+> Prebuilt binaries and a one-line installer for macOS, Linux, and Windows are attached to each tagged [release](https://github.com/fkenmar/atlas/releases) by [cargo-dist](https://opensource.axo.dev/cargo-dist/).
 
 ---
 
@@ -78,13 +88,15 @@ atlas . --no-private             # public API surface only
 atlas . --format json            # JSON instead of Markdown
 ```
 
+By default atlas aims for a 2,048-token budget. When a repo doesn't fit, it degrades in steps rather than truncating: it drops private symbols (the header shows `public-only`), then elides parameter detail, then collapses the lowest-ranked files to a single line. Raise `--budget` for more detail, or use `--focus` to protect the paths you care about.
+
+atlas caches parse results in a `.atlas/` directory at the repo root so re-runs are fast — add `.atlas/` to your `.gitignore`.
+
 Pipe the output straight into your agent's context, or save it to a file:
 
 ```
 atlas . > map.md
 ```
-
-**Languages:** Python, TypeScript/JavaScript, and Rust today. Go, Java, and C/C++ are planned.
 
 ---
 
@@ -106,10 +118,10 @@ Then `@`-mention `atlas-map.md` in your prompt (or paste it in). Regenerate it w
 { echo "Repo map:"; atlas .; echo; echo "Task: add a --verbose flag"; } | your-agent
 ```
 
-**Focus the budget on what you're touching** — `--focus` ranks those paths higher, so the map spends its tokens where you're working:
+**Focus the budget on what you're touching** — `--focus` ranks those paths higher; repeat the flag for several:
 
 ```
-atlas . --focus src/auth,src/api > atlas-map.md
+atlas . --focus src/auth --focus src/api > atlas-map.md
 ```
 
 **Keep it in the repo** so every contributor and agent starts oriented — commit `atlas-map.md` and regenerate it in a pre-commit hook or CI.
@@ -130,6 +142,14 @@ discover → parse → link → rank → budget → render
 ```
 
 It reads your repo with [tree-sitter](https://tree-sitter.github.io/tree-sitter/), respects `.gitignore` (and `.atlasignore`), and caches parse results so re-runs are fast.
+
+---
+
+## Troubleshooting
+
+- **Empty map / "0 files".** atlas found no supported source under that path. Check the language is one it maps (Python, TS/JS, Rust) and that you're pointing at the project root — not a single file, and not a vendored or ignored directory.
+- **`command not found: atlas`.** `~/.cargo/bin` isn't on your `PATH`. Add it (rustup's installer normally does), or run the binary by its full path.
+- **A symbol is wrong or missing.** That's usually a tree-sitter extraction bug — please [open an issue](https://github.com/fkenmar/atlas/issues/new?template=bug_report.md) with a minimal snippet that reproduces it.
 
 ---
 
