@@ -21,6 +21,7 @@ exclude = [
     "/CLAUDE.md",
     "/STATUS.md",
     "/ideas.md",
+    "/dist-workspace.toml",
 ]
 
 # Dependencies land milestone by milestone (docs/PRD.md §7.2): tree-sitter +
@@ -34,3 +35,8 @@ tree-sitter-rust = "0.24.2"
 tiktoken-rs = "0.12.0"
 clap = { version = "4.6.1", features = ["derive"] }
 bincode = { version = "2.0", features = ["derive"] }
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

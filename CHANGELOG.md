@@ -8,6 +8,19 @@ benchmark delta.
 
 ## [Unreleased]
 
+### Added
+- **Prebuilt binary distribution via cargo-dist.** A GitHub Actions release
+  workflow (`.github/workflows/release.yml`) cross-builds `atlas` for macOS,
+  Linux, and Windows (x86_64 + arm64) and publishes a `curl | sh` shell
+  installer plus per-platform archives on every version tag. dist config lives
+  in `dist-workspace.toml`.
+
+### Changed
+- **Leaner published crate.** A Cargo.toml `exclude` drops dev-only process
+  dirs (`.claude`, `.github`, `benchmark`, `docs`) and process docs from the
+  packaged artifact: `cargo package` went from 81 to 41 files (55.8 KiB
+  compressed) and still builds standalone.
+
 ## [0.1.0-alpha] - 2026-06-16
 
 First tagged pre-release. The renamed **atlas** binary with the full M1 pipeline
