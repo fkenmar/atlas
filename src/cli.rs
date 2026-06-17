@@ -83,6 +83,18 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         return Err(2);
     }
 
+    // `serve`/`diff` are promoted in the README as planned commands; a user who
+    // tries `atlas serve` lands here (clap parses the word as the path). Give a
+    // clear "planned" message instead of a path-not-found error.
+    let path_str = cli.path.to_string_lossy();
+    if matches!(path_str.as_ref(), "serve" | "diff") && !cli.path.exists() {
+        eprintln!(
+            "atlas: '{path_str}' is a planned command, not available yet — \
+             see the roadmap: https://github.com/fkenmar/atlas#project-status"
+        );
+        return Err(2);
+    }
+
     let root = cli.path.canonicalize().map_err(|err| {
         match err.kind() {
             std::io::ErrorKind::NotFound => eprintln!(
