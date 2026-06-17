@@ -1,8 +1,7 @@
 //! Pipeline driver. Parses flags (clap derive) and runs the full M1 pipeline:
 //! discover → parse → link → rank → budget → render. The default (and, in M1,
 //! only) subcommand is the implicit `map`; `serve`/`diff` land in later
-//! milestones. JSON/XML renderers land with FR-5's later rungs, so `--format`
-//! currently accepts `md` only.
+//! milestones.
 
 use std::path::{Path, PathBuf};
 
@@ -11,11 +10,28 @@ use clap::Parser;
 use crate::budget::{BudgetOptions, TiktokenCounter, DEFAULT_BUDGET};
 use crate::lang::Language;
 
+const EXAMPLES: &str = "\
+EXAMPLES:
+  atlas .                      Map the current folder (default 2,048-token budget)
+  atlas . --budget 4096        Give the map a larger token budget
+  atlas src --focus src/auth   Rank files under src/auth higher
+  atlas . --no-private         Public API surface only
+  atlas . --format json        Emit JSON instead of Markdown
+  atlas . > map.md             Save the map (e.g. to feed an agent)
+
+Pipe the output into your AI coding agent's context so it can navigate the repo
+without reading every file. Docs: https://github.com/fkenmar/atlas";
+
 #[derive(Parser, Debug)]
 #[command(
     name = "atlas",
     version,
-    about = "Compile a codebase into a token-budgeted structural map for LLM coding agents"
+    about = "Compile a codebase into a token-budgeted structural map for LLM coding agents",
+    long_about = "Walks a repository, extracts every signature, type, and import edge \
+(never function bodies), ranks files by how central they are to the codebase, packs the \
+most important files into a token budget, and prints a Markdown (or JSON) map to stdout — \
+ready to drop into an LLM coding agent's context.",
+    after_help = EXAMPLES
 )]
 pub struct Cli {
     /// Repository root to map.
@@ -23,20 +39,20 @@ pub struct Cli {
     pub path: PathBuf,
 
     /// Token budget for the map.
-    #[arg(long, default_value_t = DEFAULT_BUDGET, value_name = "N")]
+    #[arg(short, long, default_value_t = DEFAULT_BUDGET, value_name = "N")]
     pub budget: usize,
 
-    /// Output format (json/xml land in later M1/M3 rungs).
-    #[arg(long, value_enum, default_value_t = Format::Md)]
+    /// Output format: md (default) or json.
+    #[arg(short, long, value_enum, default_value_t = Format::Md)]
     pub format: Format,
 
     /// Restrict to languages by extension, e.g. --lang py,rs.
-    #[arg(long, value_name = "CSV")]
+    #[arg(short, long, value_name = "CSV")]
     pub lang: Option<String>,
 
-    /// Boost a file or directory in the ranking (repeatable),
-    /// e.g. --focus src/auth --focus src/api/routes.ts.
-    #[arg(long, value_name = "PATH")]
+    /// Boost a file or directory in the ranking. Repeatable, and accepts a
+    /// comma-separated list: --focus src/auth,src/api or --focus src/auth.
+    #[arg(long, value_name = "PATHS")]
     pub focus: Vec<String>,
 
     /// Public API surface only — drop private symbols.
@@ -48,7 +64,7 @@ pub struct Cli {
 pub enum Format {
     /// Markdown (default), optimized for LLM readability.
     Md,
-    /// Versioned JSON schema for programmatic consumers (PRD §7.3).
+    /// Versioned, stable JSON schema for programmatic consumers.
     Json,
 }
 
@@ -62,10 +78,34 @@ pub fn run() {
 }
 
 fn run_with(cli: Cli) -> Result<(), i32> {
+    if cli.budget == 0 {
+        eprintln!("atlas: --budget must be at least 1 token (the default is {DEFAULT_BUDGET})");
+        return Err(2);
+    }
+
     let root = cli.path.canonicalize().map_err(|err| {
-        eprintln!("atlas: cannot open {}: {err}", cli.path.display());
+        match err.kind() {
+            std::io::ErrorKind::NotFound => eprintln!(
+                "atlas: path not found: {} — atlas maps a directory; pass a repo root, \
+                 or omit the path to map the current folder",
+                cli.path.display()
+            ),
+            std::io::ErrorKind::PermissionDenied => {
+                eprintln!("atlas: permission denied reading {}", cli.path.display())
+            }
+            _ => eprintln!("atlas: cannot open {}: {err}", cli.path.display()),
+        }
         2
     })?;
+
+    if !root.is_dir() {
+        eprintln!(
+            "atlas: {} is not a directory — atlas maps a repository root, not a single file",
+            cli.path.display()
+        );
+        return Err(2);
+    }
+
     let repo_name = root
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -73,15 +113,31 @@ fn run_with(cli: Cli) -> Result<(), i32> {
 
     let langs = parse_langs(cli.lang.as_deref())?;
     let mut files = crate::discover::discover(&root);
+    let discovered = files.len();
+    if discovered == 0 {
+        eprintln!(
+            "atlas: no supported source files found under {}. atlas maps Python, \
+             TypeScript/JavaScript, and Rust — is this the repo root? (see --help)",
+            cli.path.display()
+        );
+        return Err(1);
+    }
     if !langs.is_empty() {
         files.retain(|f| langs.contains(&f.lang));
+        if files.is_empty() {
+            eprintln!(
+                "atlas: --lang matched none of the {discovered} source file(s) found under {}",
+                cli.path.display()
+            );
+            return Err(1);
+        }
     }
 
     let mut cache = crate::cache::Cache::open(&root);
     let outcome = crate::parse::parse_all_cached(files, &mut cache);
     cache.save();
     let graph = crate::link::link(&outcome.files);
-    let focus = resolve_focus(&cli.focus, &root, &outcome.files);
+    let focus = resolve_focus(&cli.focus, &root, &outcome.files)?;
     let ranking = crate::rank::rank(&graph, &focus);
 
     let counter = TiktokenCounter::cl100k().map_err(|err| {
@@ -123,7 +179,10 @@ fn parse_langs(csv: Option<&str>) -> Result<Vec<Language>, i32> {
         match Language::from_extension(token) {
             Some(lang) => langs.push(lang),
             None => {
-                eprintln!("atlas: unknown language extension {token:?}");
+                eprintln!(
+                    "atlas: unknown --lang value {token:?}. Supported extensions: \
+                     py, pyi, ts, tsx, js, jsx, mjs, cjs, rs (Python, TypeScript/JavaScript, Rust)"
+                );
                 return Err(2);
             }
         }
@@ -131,20 +190,32 @@ fn parse_langs(csv: Option<&str>) -> Result<Vec<Language>, i32> {
     Ok(langs)
 }
 
-/// Map `--focus` paths (files or directories, interpreted relative to the
-/// repo root) to file-node indices for the PageRank personalization vector.
-/// A File node's index equals its index into `files` (link ADR-0002), so the
-/// returned indices are directly usable as personalization seeds. Focus
-/// targets that don't resolve under the root are skipped.
+/// Map `--focus` paths (files or directories, relative to the repo root) to
+/// file-node indices for the PageRank personalization vector. Each `--focus`
+/// value may itself be a comma-separated list (mirroring `--lang`). A File
+/// node's index equals its index into `files` (link ADR-0002). If *every*
+/// focus path fails to resolve, that's an error (exit 2) rather than a
+/// silently-unfocused map; if only some fail, they're warned and skipped.
 fn resolve_focus(
     focus: &[String],
     root: &Path,
     files: &[(crate::discover::SourceFile, crate::parse::ParsedFile)],
-) -> Vec<usize> {
+) -> Result<Vec<usize>, i32> {
+    if focus.is_empty() {
+        return Ok(Vec::new());
+    }
+    let targets: Vec<String> = focus
+        .iter()
+        .flat_map(|f| f.split(','))
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+
     let mut seeds = Vec::new();
-    for target in focus {
+    let mut unresolved = Vec::new();
+    for target in &targets {
         let Some(rel) = canonical_rel(target, root) else {
-            eprintln!("atlas: --focus path not found under the repo: {target:?}");
+            unresolved.push(target.clone());
             continue;
         };
         let dir_prefix = format!("{rel}/");
@@ -154,9 +225,24 @@ fn resolve_focus(
             }
         }
     }
+
+    if seeds.is_empty() && !unresolved.is_empty() {
+        eprintln!(
+            "atlas: none of the --focus paths exist under the repo root \
+             (paths are relative to it): {}",
+            unresolved.join(", ")
+        );
+        return Err(2);
+    }
+    if !unresolved.is_empty() {
+        eprintln!(
+            "atlas: warning: ignored --focus path(s) not found under the repo root: {}",
+            unresolved.join(", ")
+        );
+    }
     seeds.sort_unstable();
     seeds.dedup();
-    seeds
+    Ok(seeds)
 }
 
 /// Resolve a focus target (relative to `root`) to a root-relative, `/`-joined
@@ -209,6 +295,14 @@ mod tests {
         assert_eq!(cli.lang.as_deref(), Some("py,rs"));
         assert_eq!(cli.focus, vec!["src/auth", "src/api/routes.ts"]);
         assert!(cli.no_private);
+    }
+
+    #[test]
+    fn short_flags_work() {
+        let cli = parse(&["atlas", "-b", "512", "-f", "json", "-l", "rs"]);
+        assert_eq!(cli.budget, 512);
+        assert_eq!(cli.format, Format::Json);
+        assert_eq!(cli.lang.as_deref(), Some("rs"));
     }
 
     #[test]
