@@ -9,6 +9,19 @@ repository = "https://github.com/fkenmar/atlas"
 readme = "README.md"
 keywords = ["llm", "tree-sitter", "code-map", "tokens", "agent"]
 categories = ["command-line-utilities", "development-tools"]
+# Keep the published package to the shippable crate — drop dev-only process
+# dirs (agent config, benchmark harness, internal docs/status) that bloat the
+# distributable without affecting the build. src/, queries/ (include_str!'d),
+# examples/, and tests/ stay in.
+exclude = [
+    "/.claude",
+    "/.github",
+    "/benchmark",
+    "/docs",
+    "/CLAUDE.md",
+    "/STATUS.md",
+    "/ideas.md",
+]
 
 # Dependencies land milestone by milestone (docs/PRD.md §7.2): tree-sitter +
 # grammar crates (M0), clap/rayon/tiktoken-rs/bincode (M1), notify/git2 (M2).
