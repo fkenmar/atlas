@@ -26,7 +26,7 @@
 
 ---
 
-When an AI coding agent works in your repo, it spends most of its effort just figuring out where things are: opening file after file to learn the layout. **atlas** does that once and hands the agent a single ~2,000-token map — every function signature, type, and import, ranked by importance, with no function bodies. The agent gets its bearings immediately and gets to work.
+When an AI coding agent works in your repo, it spends most of its effort just figuring out where things are: opening file after file to learn the layout. **atlas** does that once and hands the agent a single ~2,000-token map — every function signature, type, and import, ranked by importance, with no function bodies. The agent gets its bearings immediately and gets to work. It's the idea behind aider's repo map, unbundled into a standalone tool you can point at any agent.
 
 In our benchmark, agents given an atlas map answered structural questions about a codebase using **~65% fewer tokens at identical accuracy** (20/20 correct *with* and *without* the map) — typically resolving in a **single turn instead of three**. On open-ended edit tasks the map cuts turns too, though token savings there vary by task.
 
@@ -176,7 +176,7 @@ It reads your repo with [tree-sitter](https://tree-sitter.github.io/tree-sitter/
 
 ## Project status
 
-Alpha. The core works end-to-end and is benchmark-tested, but the CLI and output format may still change. See [STATUS.md](STATUS.md) for the current state, [CHANGELOG.md](CHANGELOG.md) for what's landed, and [docs/PRD.md](docs/PRD.md) for the full design.
+Alpha. The core works end-to-end and is benchmark-tested, but the CLI and output format may still change — pin a version if you depend on the output. See [STATUS.md](STATUS.md) for the current state, [CHANGELOG.md](CHANGELOG.md) for what's landed, and [docs/PRD.md](docs/PRD.md) for the full design.
 
 Coming next: an MCP server so agents can query the map directly (`atlas serve --mcp`), and an API-surface diff between revisions (`atlas diff HEAD~5`).
 

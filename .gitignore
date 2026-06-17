@@ -1,5 +1,28 @@
+# Rust / build output
 /target
+
+# atlas cache + self-map
 .atlas/
 .repomap/
+
+# benchmark working files + local results
 benchmark/results/*.local.json
 benchmark/.work/
+
+# Python tooling (maturin / benchmark scripts)
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Local agent/editor settings (keep out of the public repo)
+.claude/settings.local.json
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS junk
+.DS_Store
+Thumbs.db
