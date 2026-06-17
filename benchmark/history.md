@@ -42,3 +42,10 @@ See benchmark/results/run-20260616-101017.local.json.
 - **Bottom line for M1:** the "measurable benchmark win" exit criterion is **not met on edit-task tokens.** The defensible wins are **turns (−25%)** and **comprehension (−45% tokens at equal accuracy, earlier)**. The 80% token-reduction goal is out of reach with this approach. The benchmark's dominant problem is variance, not the map — stabilizing it (task redesign, trimmed means, larger N) is the prerequisite for any trustworthy token verdict.
 
 See benchmark/results/run-20260616-232455.local.json.
+
+---
+
+**Comprehension worthiness gate — PASSED (2026-06-17, run-004810, 20 verified questions, sonnet, read-only both arms).** The trustworthy, low-variance signal atlas can stand behind:
+- **Accuracy: 20/20 both arms (100%)** — equal, perfect, **zero per-question regressions** (the map never made the agent wronger). Hard gate (with_map ≥ without_map): **PASS**.
+- **Tokens: 85,817 → 59,916 = −30.1%** at identical accuracy. **Turns: 3 → 2 (−33%).**
+- This is the download-worthy claim: the map lets an agent locate structural elements with ~30% fewer tokens and a third fewer turns without losing any accuracy. Unlike edit-task token deltas (60–140% variance), comprehension is constrained and stable across 20 questions — this is the number that goes in the README, and the basis for moving to usability/ship work. See benchmark/results/run-20260617-004810.local.json.
