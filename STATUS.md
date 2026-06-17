@@ -34,6 +34,15 @@ milestones **M1 — Core** (#1–#6, #14), **M2 — Integration** (#7–#9, #13)
 - **#4 rayon** deferred (new-dep gate; cold path already 3× under target, low value now).
 - M2/M3 epics (#7–#13) intentionally deferred behind M1 exit.
 
+**Shipped this session:** cut **`v0.1.0-alpha`** GitHub pre-release (notes + verified
+NFR-1 numbers; honestly labeled "M1 win pending #1"; no crates.io per maintainer).
+Packaging: trimmed the published crate (`cargo package` 81 → 41 files via Cargo.toml
+`exclude`) and set up **cargo-dist 0.32** (`dist-workspace.toml` + `.github/workflows/release.yml`)
+— on every version tag, CI cross-builds macOS/Linux/Windows (x86_64+arm64) + a `curl|sh`
+installer onto the GitHub release. (M2 item #9 pulled forward at the maintainer's request;
+completes on its first tagged matrix run.) Verified locally via `dist plan` + dist-profile
+host build. **RL** evaluated and parked (ideas.md) — does not fit the structural-only scope.
+
 ## Ship-prep + rename — 2026-06-16 (repomap → atlas)
 
 Renamed the project to **atlas** end-to-end (crate, binary, map header, CLI messages, cache dir `.repomap`→`.atlas`, ignore file `.atlasignore`) — the binary is now `atlas`, `cargo install --path .` works. Made it usable for a general audience: rewrote README (problem-first, real example output, simple install/usage), added MIT `LICENSE`, added `repository`/`readme`/`keywords`/`categories` to Cargo.toml, added 10 GitHub topics for discoverability. Gate green (68 tests, clippy clean). **80% token-reduction goal paused at the measured ~70%** per maintainer ("stop around 70% for now"); the N≥5 benchmark to confirm the aggregate remains the open decisive measurement when the goal resumes. Local git remote still points at the old `RepoBrain.git` (push works via GitHub redirect; rewrite to `atlas.git` is a one-liner the maintainer can run). A tagged `v0.1.0` GitHub release is the natural next shipping step (gated on the M1 benchmark-win criterion).
