@@ -1,7 +1,7 @@
 # atlas demo — record with charmbracelet/vhs:
-#   brew install vhs           # or: go install github.com/charmbracelet/vhs@latest
-#   cd <your repo>             # run from a repo with real Python/TS/Rust source
-#   vhs path/to/assets/demo.tape
+#   brew install vhs           # pulls in ttyd + ffmpeg
+#   cargo build --release      # build the atlas binary
+#   vhs assets/demo.tape       # run from the repo root
 # Produces assets/atlas-demo.gif — drop it at the top of the README, above Install.
 
 Output assets/atlas-demo.gif
@@ -9,29 +9,44 @@ Output assets/atlas-demo.gif
 Set Theme "Catppuccin Mocha"
 Set FontSize 18
 Set Width 1100
-Set Height 640
+Set Height 680
 Set Padding 24
-Set PlaybackSpeed 0.8
+Set TypingSpeed 35ms
+Set PlaybackSpeed 1.0
 
-Type "atlas ."
+# Make the freshly built binary resolvable, without recording the setup.
+Hide
+Type "export PATH=$PWD/target/release:$PATH"
+Enter
+Type "clear"
+Enter
+Show
+
+Type "# one command maps your whole repo — signatures only, no bodies"
+Sleep 500ms
+Enter
+Type "atlas . --color always | head -16"
 Sleep 400ms
 Enter
 Sleep 3s
+Ctrl+L
 
-Type "# rank what you're working on higher, bigger budget"
-Sleep 600ms
+Type "# --focus boosts what you're working on to the top"
+Sleep 500ms
 Enter
-Type "atlas . --focus src --budget 4096 | head -20"
+Type "atlas . --focus src/rank.rs --color always | head -16"
 Sleep 400ms
 Enter
 Sleep 3s
+Ctrl+L
 
-Type "# save it and hand it to your agent"
-Sleep 600ms
+Type "# pipe the map straight into your coding agent's context"
+Sleep 500ms
 Enter
 Type "atlas . > atlas-map.md"
 Sleep 400ms
 Enter
-Sleep 1.5s
-
-Sleep 2s
+Type "wc -l atlas-map.md"
+Sleep 400ms
+Enter
+Sleep 2.5s

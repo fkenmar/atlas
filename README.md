@@ -22,6 +22,11 @@
   <a href="#troubleshooting"><b>Troubleshooting</b></a>
 </sub>
 
+<br>
+<br>
+
+<img src="assets/atlas-demo.gif" width="820" alt="atlas demo: map a whole repo, focus a file to rerank it, and save the map for your agent">
+
 </div>
 
 ---
