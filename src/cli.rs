@@ -175,6 +175,34 @@ pub struct ServeArgs {
     pub root: Option<PathBuf>,
 }
 
+/// `atlas cache <info|clean>` — inspect or clear the parse cache (#80). Routed
+/// by [`run`] before the map parser, git-style.
+#[derive(Parser, Debug)]
+#[command(name = "atlas cache", about = "Inspect or clear the parse cache")]
+pub struct CacheArgs {
+    #[command(subcommand)]
+    pub command: CacheCommand,
+}
+
+#[derive(clap::Subcommand, Debug)]
+pub enum CacheCommand {
+    /// Report cache path, size, entry count, version, and self-ignore status.
+    Info {
+        /// Repository root (default: current directory).
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+    /// Delete the cache file. Requires --force (the cache is safe to rebuild).
+    Clean {
+        /// Repository root (default: current directory).
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Actually delete (without this, prints what would be removed).
+        #[arg(long)]
+        force: bool,
+    },
+}
+
 /// Entry point called from `main`. Exits the process with a status code.
 pub fn run() {
     // Git-style dispatch: `atlas diff <old> <new>` routes to the diff command
@@ -196,6 +224,16 @@ pub fn run() {
             std::iter::once("atlas serve".to_string()).chain(args.into_iter().skip(2)),
         );
         std::process::exit(match run_serve(serve) {
+            Ok(()) => 0,
+            Err(code) => code,
+        });
+    }
+    // `atlas cache <info|clean>` inspects or clears the parse cache (#80).
+    if args.get(1).map(String::as_str) == Some("cache") {
+        let cache = CacheArgs::parse_from(
+            std::iter::once("atlas cache".to_string()).chain(args.into_iter().skip(2)),
+        );
+        std::process::exit(match run_cache(cache) {
             Ok(()) => 0,
             Err(code) => code,
         });
@@ -265,6 +303,57 @@ fn run_serve(args: ServeArgs) -> Result<(), i32> {
         eprintln!("atlas: MCP server failed: {err}");
         1
     })
+}
+
+/// `atlas cache info|clean` — inspect or clear the parse cache (#80).
+fn run_cache(args: CacheArgs) -> Result<(), i32> {
+    match args.command {
+        CacheCommand::Info { path } => {
+            let info = crate::cache::info(&path);
+            println!("cache:         {}", info.path.display());
+            if info.exists {
+                println!("status:        present");
+                println!("size:          {} bytes", info.size_bytes);
+                println!("entries:       {}", info.entries);
+            } else {
+                println!("status:        absent (no cache written yet)");
+            }
+            println!("cache version: {}", info.version);
+            println!(
+                "self-ignored:  {}",
+                if info.self_ignored {
+                    "yes (.atlas/.gitignore present)"
+                } else {
+                    "no"
+                }
+            );
+            Ok(())
+        }
+        CacheCommand::Clean { path, force } => {
+            let cache_path = path.join(".atlas").join("cache");
+            if !force {
+                eprintln!(
+                    "atlas cache clean: would remove {} — re-run with --force to delete",
+                    cache_path.display()
+                );
+                return Err(2);
+            }
+            match crate::cache::clean(&path) {
+                Ok(true) => {
+                    println!("removed {}", cache_path.display());
+                    Ok(())
+                }
+                Ok(false) => {
+                    println!("no cache to remove at {}", cache_path.display());
+                    Ok(())
+                }
+                Err(err) => {
+                    eprintln!("atlas cache clean: {err}");
+                    Err(1)
+                }
+            }
+        }
+    }
 }
 
 /// Canonicalize `path` and confirm it's a directory, with actionable error

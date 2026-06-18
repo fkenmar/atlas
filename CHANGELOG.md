@@ -16,6 +16,11 @@ benchmark delta.
   unaffected. Verified cold==warm output and run-to-run determinism.
 
 ### Added
+- **Cache management commands (#80).** `atlas cache info` reports the cache
+  path, presence, size, entry count, cache version, and self-ignore status;
+  `atlas cache clean --force` removes the cache file (the `--force` guard prevents
+  accidental deletion; the `.atlas/.gitignore` self-ignore is left in place).
+  A supported alternative to deleting `.atlas/` by hand.
 - **MCP server (`atlas serve --mcp`, #7).** atlas now runs as an MCP server over
   stdio (newline-delimited JSON-RPC 2.0) so an LLM agent can pull a fresh map as
   a tool call instead of being handed a static one. One tool, `get_map(path,

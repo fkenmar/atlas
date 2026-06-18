@@ -132,6 +132,48 @@ pub fn content_hash(content: &str) -> u64 {
     hasher.finish()
 }
 
+/// A snapshot of the on-disk cache state for `atlas cache info` (#80).
+pub struct CacheInfo {
+    pub path: PathBuf,
+    pub exists: bool,
+    pub size_bytes: u64,
+    pub entries: usize,
+    pub version: u32,
+    pub self_ignored: bool,
+}
+
+/// Inspect the cache under `<repo_root>/.atlas/cache` without modifying it.
+pub fn info(repo_root: &Path) -> CacheInfo {
+    let atlas_dir = repo_root.join(".atlas");
+    let path = atlas_dir.join("cache");
+    let exists = path.is_file();
+    let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    // `load` version-checks: a stale-version blob counts as 0 live entries.
+    let entries = load(&path).map(|m| m.len()).unwrap_or(0);
+    let self_ignored = atlas_dir.join(".gitignore").is_file();
+    CacheInfo {
+        path,
+        exists,
+        size_bytes,
+        entries,
+        version: CACHE_VERSION,
+        self_ignored,
+    }
+}
+
+/// Remove the cache file under `<repo_root>/.atlas/cache` (leaving the
+/// `.atlas/.gitignore` self-ignore in place). Returns whether a file was
+/// removed.
+pub fn clean(repo_root: &Path) -> std::io::Result<bool> {
+    let path = repo_root.join(".atlas").join("cache");
+    if path.is_file() {
+        std::fs::remove_file(&path)?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 /// Load and version-check the cache file; `None` (→ cold parse) on any miss.
 fn load(path: &Path) -> Option<BTreeMap<String, CacheEntry>> {
     let bytes = std::fs::read(path).ok()?;
