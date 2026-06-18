@@ -19,7 +19,7 @@ EXAMPLES:
   atlas src --focus src/auth   Rank files under src/auth higher
   atlas . --no-private         Public API surface only
   atlas . --format json        Emit JSON instead of Markdown
-  atlas diff old/ new/         Structural delta between two trees (added/removed/changed)
+  atlas diff HEAD~1 HEAD       Structural delta between two git revisions (or two dirs)
   atlas . > map.md             Save the map (e.g. to feed an agent)
   atlas --completions zsh      Print a shell completion script (bash/zsh/fish/…)
 
@@ -140,27 +140,50 @@ pub fn run() {
     })
 }
 
-/// `atlas diff <old> <new>`: parse both trees fully (no rank/budget) and print
-/// the structural delta (ADR 0005). Exit 0 whether or not anything changed —
-/// the diff is informational (PRD open question on CI-gating left for later).
+/// `atlas diff <old> <new>`: each side is a directory or a git revision (ADR
+/// 0005/0007); parse both trees fully (no rank/budget) and print the structural
+/// delta. Exit 0 whether or not anything changed — the diff is informational
+/// (PRD open question on CI-gating left for later).
 fn run_diff(args: DiffArgs) -> Result<(), i32> {
     let langs = parse_langs(args.lang.as_deref())?;
-    let old_files = discover_tree(&args.old, &langs)?;
-    let new_files = discover_tree(&args.new, &langs)?;
-    let old_outcome = crate::parse::parse_all(old_files);
-    let new_outcome = crate::parse::parse_all(new_files);
-    let opts = crate::diff::DiffOptions {
-        no_private: args.no_private,
+    let old_label = args.old.to_string_lossy().into_owned();
+    let new_label = args.new.to_string_lossy().into_owned();
+
+    let old_tree = resolve_tree(&args.old, 0)?;
+    // Clean up the first worktree if resolving the second fails.
+    let new_tree = match resolve_tree(&args.new, 1) {
+        Ok(t) => t,
+        Err(code) => {
+            old_tree.cleanup();
+            return Err(code);
+        }
     };
-    let delta = crate::diff::diff(&old_outcome.files, &new_outcome.files, &opts);
-    let old_label = args.old.display().to_string();
-    let new_label = args.new.display().to_string();
-    let (os, ns) = (&old_outcome.stats, &new_outcome.stats);
-    let out = match args.format {
-        Format::Md => crate::render::diff::render(&delta, &old_label, &new_label, os, ns),
-        Format::Json => crate::render::diff::render_json(&delta, &old_label, &new_label, os, ns),
-        Format::Xml => crate::render::diff::render_xml(&delta, &old_label, &new_label, os, ns),
+
+    let render = || -> String {
+        let mut old_files = crate::discover::discover(&old_tree.root);
+        let mut new_files = crate::discover::discover(&new_tree.root);
+        if !langs.is_empty() {
+            old_files.retain(|f| langs.contains(&f.lang));
+            new_files.retain(|f| langs.contains(&f.lang));
+        }
+        let old_outcome = crate::parse::parse_all(old_files);
+        let new_outcome = crate::parse::parse_all(new_files);
+        let opts = crate::diff::DiffOptions {
+            no_private: args.no_private,
+        };
+        let delta = crate::diff::diff(&old_outcome.files, &new_outcome.files, &opts);
+        let (os, ns) = (&old_outcome.stats, &new_outcome.stats);
+        match args.format {
+            Format::Md => crate::render::diff::render(&delta, &old_label, &new_label, os, ns),
+            Format::Json => {
+                crate::render::diff::render_json(&delta, &old_label, &new_label, os, ns)
+            }
+            Format::Xml => crate::render::diff::render_xml(&delta, &old_label, &new_label, os, ns),
+        }
     };
+    let out = render();
+    old_tree.cleanup();
+    new_tree.cleanup();
     print!("{out}");
     Ok(())
 }
@@ -193,16 +216,86 @@ fn canonicalize_root(path: &Path) -> Result<PathBuf, i32> {
     Ok(root)
 }
 
-/// Discover + language-filter one side of a diff. An empty tree is allowed (it
-/// diffs as all-added or all-removed); a missing path or non-directory is an
-/// error.
-fn discover_tree(path: &Path, langs: &[Language]) -> Result<Vec<crate::discover::SourceFile>, i32> {
-    let root = canonicalize_root(path)?;
-    let mut files = crate::discover::discover(&root);
-    if !langs.is_empty() {
-        files.retain(|f| langs.contains(&f.lang));
+/// One side of a diff resolved to a directory on disk: either an existing path,
+/// or a git revision checked out into a temp worktree that must be cleaned up.
+struct ResolvedTree {
+    root: PathBuf,
+    /// Temp worktree to remove when done (`None` for a plain path).
+    worktree: Option<PathBuf>,
+}
+
+impl ResolvedTree {
+    /// Best-effort removal of a materialized worktree (no-op for a plain path).
+    fn cleanup(&self) {
+        if let Some(wt) = &self.worktree {
+            let _ = std::process::Command::new("git")
+                .args(["worktree", "remove", "--force"])
+                .arg(wt)
+                .output();
+        }
     }
-    Ok(files)
+}
+
+/// Resolve a diff argument (ADR 0007): an existing directory is used as-is; any
+/// other string is treated as a git revision and checked out into a temp
+/// worktree. `index` distinguishes the two sides' temp dirs.
+fn resolve_tree(arg: &Path, index: usize) -> Result<ResolvedTree, i32> {
+    if arg.is_dir() {
+        return Ok(ResolvedTree {
+            root: canonicalize_root(arg)?,
+            worktree: None,
+        });
+    }
+    materialize_revision(&arg.to_string_lossy(), index)
+}
+
+/// Check out a git revision into a fresh temp worktree via the `git` CLI (no
+/// git2 dependency — ADR 0007). Errors cleanly if `rev` isn't a commit or git
+/// can't run.
+fn materialize_revision(rev: &str, index: usize) -> Result<ResolvedTree, i32> {
+    let verified = std::process::Command::new("git")
+        .args(["rev-parse", "--verify", "--quiet"])
+        .arg(format!("{rev}^{{commit}}"))
+        .output();
+    match verified {
+        Ok(o) if o.status.success() => {}
+        Ok(_) => {
+            eprintln!(
+                "atlas: '{rev}' is not a directory or a git revision — pass a directory, \
+                 or run inside a git repo with a valid revision (e.g. HEAD~1)"
+            );
+            return Err(2);
+        }
+        Err(e) => {
+            eprintln!("atlas: git is required to diff revisions, but could not be run: {e}");
+            return Err(2);
+        }
+    }
+
+    let dir = std::env::temp_dir().join(format!("atlas-diff-{}-{index}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir); // clear any stale dir from a prior crash
+    let added = std::process::Command::new("git")
+        .args(["worktree", "add", "--detach", "--quiet"])
+        .arg(&dir)
+        .arg(rev)
+        .output();
+    match added {
+        Ok(o) if o.status.success() => Ok(ResolvedTree {
+            root: dir.clone(),
+            worktree: Some(dir),
+        }),
+        Ok(o) => {
+            eprintln!(
+                "atlas: could not check out revision '{rev}': {}",
+                String::from_utf8_lossy(&o.stderr).trim()
+            );
+            Err(2)
+        }
+        Err(e) => {
+            eprintln!("atlas: git is required to diff revisions, but could not be run: {e}");
+            Err(2)
+        }
+    }
 }
 
 fn run_with(cli: Cli) -> Result<(), i32> {

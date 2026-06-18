@@ -144,8 +144,13 @@ made `pub(crate)`), stamped `DIFF_SCHEMA_VERSION`, validated end-to-end with rea
 JSON/XML parsers. Kind-change pairing (#17, ADR 0006) — a name that changes kind
 (free fn → method) now reads as one `±` entry instead of remove + add;
 conservative 1↔1 unique-name matching, overloads still fall back. PRD §7.3 schema
-sketch refreshed to the shipped shape (#19). Gate: 100 lib tests + 5 integration,
-clippy clean. Remaining diff backlog: git-revision shorthand (#18, needs git2).
+sketch refreshed to the shipped shape (#19). Git-revision diff (#18, ADR 0007):
+each side is a directory **or a git revision** — `atlas diff HEAD~1 HEAD` —
+checked out via the `git` CLI into a temp worktree (chose git CLI over the `git2`
+crate to stay dep-free), cleaned up after; verified end-to-end on this repo +
+a hermetic temp-repo integration test. Gate: 100 lib + 6 integration tests,
+clippy clean. The whole `atlas diff` family (#12/#16/#17/#18) is now shipped;
+only the one-arg "vs working tree" form remains as a minor follow-up.
 
 ## XML renderer — first M3 deliverable (2026-06-18, closes #11)
 

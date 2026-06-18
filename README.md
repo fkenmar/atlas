@@ -108,7 +108,7 @@ atlas . --lang py,rs             # only these languages
 atlas . --no-private             # public API surface only
 atlas . --format json            # JSON instead of Markdown
 atlas . --format xml             # XML, for wrapping in a Claude prompt
-atlas diff old/ new/             # structural delta between two trees (added/removed/changed)
+atlas diff HEAD~1 HEAD           # structural delta between two git revisions (or two dirs)
 atlas . --color always           # force ANSI color (auto-detects a terminal otherwise)
 ```
 
@@ -185,7 +185,7 @@ It reads your repo with [tree-sitter](https://tree-sitter.github.io/tree-sitter/
 
 Alpha. The core works end-to-end and is benchmark-tested, but the CLI and output format may still change — pin a version if you depend on the output. See [STATUS.md](STATUS.md) for the current state, [CHANGELOG.md](CHANGELOG.md) for what's landed, and [docs/PRD.md](docs/PRD.md) for the full design.
 
-`atlas diff <old> <new>` shows the structural delta between two trees — added/removed/changed signatures and import edges — so an agent sees what moved without re-reading the tree. Markdown by default; `--format json` or `xml` for tooling and CI. To compare git revisions today, materialize them first (e.g. `git worktree add`); a `atlas diff HEAD~5` shorthand is on the roadmap.
+`atlas diff <old> <new>` shows the structural delta between two trees — added/removed/changed signatures and import edges — so an agent sees what moved without re-reading the tree. Each side is a directory **or a git revision** (`atlas diff HEAD~1 HEAD`, `atlas diff v0.2.0 .`); revisions are checked out via `git` under the hood (no extra setup). Markdown by default; `--format json` or `xml` for tooling and CI.
 
 Coming next: an MCP server so agents can query the map directly (`atlas serve --mcp`).
 

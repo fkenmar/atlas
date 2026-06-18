@@ -72,6 +72,56 @@ fn diff_is_deterministic_end_to_end() {
 }
 
 #[test]
+fn diff_resolves_git_revisions() {
+    use std::fs;
+    // A hermetic temp repo with two commits; diff the revisions (ADR 0007).
+    let repo = std::env::temp_dir().join(format!("atlas_diff_rev_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&repo);
+    fs::create_dir_all(&repo).expect("mk repo");
+
+    let git = |args: &[&str]| {
+        let ok = Command::new("git")
+            .args(args)
+            .current_dir(&repo)
+            .output()
+            .expect("run git")
+            .status
+            .success();
+        assert!(ok, "git {args:?} failed");
+    };
+    git(&["init", "-q"]);
+    git(&["config", "user.email", "t@example.com"]);
+    git(&["config", "user.name", "atlas-test"]);
+
+    fs::write(repo.join("m.py"), "def f(x):\n    pass\n").expect("write v1");
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "v1"]);
+
+    fs::write(repo.join("m.py"), "def f(x, y):\n    pass\n").expect("write v2");
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "v2"]);
+
+    let out = Command::new(env!("CARGO_BIN_EXE_atlas"))
+        .args(["diff", "HEAD~1", "HEAD"])
+        .current_dir(&repo)
+        .output()
+        .expect("run atlas");
+    let _ = fs::remove_dir_all(&repo);
+
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8(out.stdout).expect("utf-8");
+    assert!(stdout.contains("# atlas diff: HEAD~1 → HEAD"), "{stdout}");
+    assert!(
+        stdout.contains("~ function f: def f(x): → def f(x, y):"),
+        "{stdout}"
+    );
+}
+
+#[test]
 fn diff_nonexistent_path_exits_2() {
     let out = Command::new(env!("CARGO_BIN_EXE_atlas"))
         .arg("diff")

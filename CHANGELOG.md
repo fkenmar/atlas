@@ -15,8 +15,9 @@ benchmark delta.
   without re-reading the tree. Runs on the raw parse output (no ranking/budget, so
   every change is reported), with deterministic Markdown, JSON, and XML output
   (`--format`, #16) — the structured forms reuse the map renderers' escapers.
-  Compare git revisions by materializing them first (`git worktree add`); a
-  revision shorthand is a deferred follow-up (#18). No new dependency. See ADR 0005.
+  Each side is a directory **or a git revision** — `atlas diff HEAD~1 HEAD`,
+  `atlas diff v0.2.0 .` — revisions checked out via the `git` CLI into a temp
+  worktree (no `git2` dependency; ADR 0007, #18). No new dependency. See ADR 0005.
   Closes #12.
   - A declaration that keeps its name but changes kind (e.g. a free `fn` moved
     into an `impl`, function → method) is paired into a single `±` change entry
