@@ -18,6 +18,10 @@ benchmark delta.
   Compare git revisions by materializing them first (`git worktree add`); a
   revision shorthand is a deferred follow-up (#18). No new dependency. See ADR 0005.
   Closes #12.
+  - A declaration that keeps its name but changes kind (e.g. a free `fn` moved
+    into an `impl`, function → method) is paired into a single `±` change entry
+    instead of an unexplained remove + add (ADR 0006, #17). Conservative: only
+    unique-name 1↔1 matches pair; overloads stay as add/remove.
 - **XML renderer (`--format xml`).** A third output format alongside Markdown
   and JSON, for prompt-injection-safe wrapping in Claude prompts: a well-formed
   XML document where signatures/paths are escaped per the XML 1.0 spec so

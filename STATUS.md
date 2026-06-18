@@ -138,11 +138,14 @@ Gate green: 95 lib tests + a `tests/diff_cli.rs` binary integration suite (4),
 clippy clean. M3 board NOT-YET cell now reads just "Tier 2 grammars" — both XML
 (#11) and diff (#12) have shipped.
 
-**Follow-up (#16):** `atlas diff --format json|xml` landed too — deterministic
+**Follow-ups landed:** `atlas diff --format json|xml` (#16) — deterministic
 structured delta reusing the map renderers' escapers (`json_str`/`xml_escape`
-made `pub(crate)`), validated end-to-end with real JSON/XML parsers. Gate: 99 lib
-tests + 5 integration. Backlog filed for the rest: kind-change pairing (#17),
-git-revision shorthand (#18, needs git2), PRD §7.3 schema refresh (#19, done).
+made `pub(crate)`), stamped `DIFF_SCHEMA_VERSION`, validated end-to-end with real
+JSON/XML parsers. Kind-change pairing (#17, ADR 0006) — a name that changes kind
+(free fn → method) now reads as one `±` entry instead of remove + add;
+conservative 1↔1 unique-name matching, overloads still fall back. PRD §7.3 schema
+sketch refreshed to the shipped shape (#19). Gate: 100 lib tests + 5 integration,
+clippy clean. Remaining diff backlog: git-revision shorthand (#18, needs git2).
 
 ## XML renderer — first M3 deliverable (2026-06-18, closes #11)
 

@@ -4,7 +4,7 @@
 
 use std::fmt::Write as _;
 
-use crate::diff::{FileDelta, FileSummary, StructuralDiff, SymbolChange, SymbolLine};
+use crate::diff::{FileDelta, FileSummary, KindChange, StructuralDiff, SymbolChange, SymbolLine};
 use crate::parse::ParseStats;
 use crate::render::json::json_str;
 use crate::render::xml::xml_escape;
@@ -73,6 +73,13 @@ pub fn render(
                     out,
                     "~ {} {}: {} → {}",
                     c.kind, c.name, c.old_signature, c.new_signature
+                );
+            }
+            for k in &fd.kind_changed {
+                let _ = writeln!(
+                    out,
+                    "± {}: {} {} → {} {}",
+                    k.name, k.old_kind, k.old_signature, k.new_kind, k.new_signature
                 );
             }
             for s in &fd.added {
@@ -165,12 +172,24 @@ fn file_delta_json(fd: &FileDelta) -> String {
             json_str(&c.new_signature)
         )
     });
+    let kind_changed = json_arr(&fd.kind_changed, |k: &KindChange| {
+        format!(
+            "{{\"name\": {}, \"old_kind\": {}, \"new_kind\": {}, \
+             \"old_sig\": {}, \"new_sig\": {}}}",
+            json_str(&k.name),
+            json_str(k.old_kind),
+            json_str(k.new_kind),
+            json_str(&k.old_signature),
+            json_str(&k.new_signature)
+        )
+    });
     let added = json_arr(&fd.added, symbol_line_json);
     let removed = json_arr(&fd.removed, symbol_line_json);
     let added_imports = json_arr(&fd.added_imports, |i: &String| json_str(i));
     let removed_imports = json_arr(&fd.removed_imports, |i: &String| json_str(i));
     format!(
-        "{{\"path\": {}, \"changed\": {changed}, \"added\": {added}, \"removed\": {removed}, \
+        "{{\"path\": {}, \"changed\": {changed}, \"kind_changed\": {kind_changed}, \
+         \"added\": {added}, \"removed\": {removed}, \
          \"added_imports\": {added_imports}, \"removed_imports\": {removed_imports}}}",
         json_str(&fd.rel)
     )
@@ -261,6 +280,18 @@ fn xml_file_delta(out: &mut String, fd: &FileDelta) {
             xml_escape(&c.new_signature, true)
         );
     }
+    for k in &fd.kind_changed {
+        let _ = writeln!(
+            out,
+            "      <kind-changed name=\"{}\" old-kind=\"{}\" new-kind=\"{}\" \
+             old-sig=\"{}\" new-sig=\"{}\"/>",
+            xml_escape(&k.name, true),
+            xml_escape(k.old_kind, true),
+            xml_escape(k.new_kind, true),
+            xml_escape(&k.old_signature, true),
+            xml_escape(&k.new_signature, true)
+        );
+    }
     for s in &fd.added {
         xml_symbol_line(out, "added", s);
     }
@@ -305,7 +336,7 @@ fn xml_stats(out: &mut String, side: &str, st: &ParseStats) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diff::{FileDelta, FileSummary, SymbolChange, SymbolLine};
+    use crate::diff::{FileDelta, FileSummary, KindChange, SymbolChange, SymbolLine};
 
     fn sample() -> StructuralDiff {
         StructuralDiff {
@@ -336,6 +367,13 @@ mod tests {
                     name: "f".to_string(),
                     old_signature: "def f(x)".to_string(),
                     new_signature: "def f(x, y)".to_string(),
+                }],
+                kind_changed: vec![KindChange {
+                    name: "k".to_string(),
+                    old_kind: "function",
+                    new_kind: "method",
+                    old_signature: "def k()".to_string(),
+                    new_signature: "def k(self)".to_string(),
                 }],
                 added_imports: vec!["c".to_string()],
                 removed_imports: vec!["a".to_string()],
@@ -402,6 +440,7 @@ mod tests {
         assert!(out.contains("## Changed files"));
         assert!(out.contains("### x.py"));
         assert!(out.contains("~ function f: def f(x) → def f(x, y)"));
+        assert!(out.contains("± k: function def k() → method def k(self)"));
         assert!(out.contains("+ def h()"));
         assert!(out.contains("- def g()"));
         assert!(out.contains("imports +: c"));
@@ -438,6 +477,13 @@ mod tests {
         );
         assert!(out.contains("\"sig\": \"def h()\""), "{out}");
         assert!(out.contains("\"sig\": \"def g()\""), "{out}");
+        assert!(
+            out.contains(
+                "\"name\": \"k\", \"old_kind\": \"function\", \"new_kind\": \"method\", \
+                 \"old_sig\": \"def k()\", \"new_sig\": \"def k(self)\""
+            ),
+            "{out}"
+        );
         assert!(out.contains("\"added_imports\": [\"c\"]"), "{out}");
         assert!(out.contains("\"removed_imports\": [\"a\"]"), "{out}");
         assert!(out.contains("\"skipped\""), "{out}");
@@ -473,6 +519,13 @@ mod tests {
         );
         assert!(
             out.contains("new-sig=\"fn f&lt;T&gt;() -&gt; &amp;T\""),
+            "{out}"
+        );
+        assert!(
+            out.contains(
+                "<kind-changed name=\"k\" old-kind=\"function\" new-kind=\"method\" \
+                 old-sig=\"def k()\" new-sig=\"def k(self)\"/>"
+            ),
             "{out}"
         );
         assert!(out.trim_end().ends_with("</atlas-diff>"), "{out}");

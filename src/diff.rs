@@ -37,6 +37,9 @@ pub struct FileDelta {
     pub added: Vec<SymbolLine>,
     pub removed: Vec<SymbolLine>,
     pub changed: Vec<SymbolChange>,
+    /// Declarations that kept their name but changed kind (e.g. free fn →
+    /// method), paired from added/removed (ADR 0006).
+    pub kind_changed: Vec<KindChange>,
     pub added_imports: Vec<String>,
     pub removed_imports: Vec<String>,
 }
@@ -52,6 +55,15 @@ pub struct SymbolLine {
 pub struct SymbolChange {
     pub kind: &'static str,
     pub name: String,
+    pub old_signature: String,
+    pub new_signature: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct KindChange {
+    pub name: String,
+    pub old_kind: &'static str,
+    pub new_kind: &'static str,
     pub old_signature: String,
     pub new_signature: String,
 }
@@ -210,6 +222,10 @@ fn file_delta(
         }
     }
 
+    // Pair uniquely-named add/remove entries of differing kinds into a single
+    // kind-change (ADR 0006); the rest stay as add/remove.
+    let kind_changed = pair_kind_changes(&mut added, &mut removed);
+
     let old_imp: BTreeSet<&String> = old_pf.imports.iter().collect();
     let new_imp: BTreeSet<&String> = new_pf.imports.iter().collect();
     let added_imports: Vec<String> = new_imp
@@ -224,6 +240,7 @@ fn file_delta(
     if added.is_empty()
         && removed.is_empty()
         && changed.is_empty()
+        && kind_changed.is_empty()
         && added_imports.is_empty()
         && removed_imports.is_empty()
     {
@@ -234,6 +251,7 @@ fn file_delta(
             added,
             removed,
             changed,
+            kind_changed,
             added_imports,
             removed_imports,
         })
@@ -244,6 +262,48 @@ fn removed_or_added(dst: &mut Vec<SymbolLine>, kind: &'static str, name: &str, s
     for sig in sigs {
         dst.push(line(kind, name, sig));
     }
+}
+
+/// Pair a uniquely-named removed symbol with a uniquely-named added symbol of a
+/// *different* kind into one [`KindChange`] (ADR 0006), removing both from the
+/// add/remove lists. Conservative: only 1↔1 unique-name matches are paired, so
+/// an unrelated add and remove that share a name are never mis-merged.
+fn pair_kind_changes(
+    added: &mut Vec<SymbolLine>,
+    removed: &mut Vec<SymbolLine>,
+) -> Vec<KindChange> {
+    let counts = |v: &[SymbolLine]| {
+        let mut m: BTreeMap<String, usize> = BTreeMap::new();
+        for s in v {
+            *m.entry(s.name.clone()).or_default() += 1;
+        }
+        m
+    };
+    let added_counts = counts(added);
+    let removed_counts = counts(removed);
+
+    let mut paired: BTreeSet<String> = BTreeSet::new();
+    let mut changes: Vec<KindChange> = Vec::new();
+    for r in removed.iter() {
+        if added_counts.get(&r.name) != Some(&1) || removed_counts.get(&r.name) != Some(&1) {
+            continue;
+        }
+        if let Some(a) = added.iter().find(|a| a.name == r.name) {
+            if a.kind != r.kind && paired.insert(r.name.clone()) {
+                changes.push(KindChange {
+                    name: r.name.clone(),
+                    old_kind: r.kind,
+                    new_kind: a.kind,
+                    old_signature: r.signature.clone(),
+                    new_signature: a.signature.clone(),
+                });
+            }
+        }
+    }
+    added.retain(|s| !paired.contains(&s.name));
+    removed.retain(|s| !paired.contains(&s.name));
+    changes.sort_by(|a, b| a.name.cmp(&b.name));
+    changes
 }
 
 fn line(kind: &'static str, name: &str, sig: &str) -> SymbolLine {
@@ -381,10 +441,9 @@ mod tests {
     }
 
     #[test]
-    fn kind_change_reports_remove_and_add() {
-        // A symbol that keeps its name but changes kind (free fn → method) is a
-        // remove + add pair, not a "changed" line — the (kind, name) identity
-        // documented in ADR 0005. This test pins that behavior as intentional.
+    fn unique_kind_change_is_paired() {
+        // A symbol that keeps its name but changes kind (free fn → method) is
+        // paired into one kind-change entry, not a remove + add (ADR 0006).
         let old = vec![file("x.py", vec![pubf("helper", "def helper()")], vec![])];
         let new = vec![file(
             "x.py",
@@ -399,11 +458,46 @@ mod tests {
         let d = diff(&old, &new, &DiffOptions { no_private: false });
         assert_eq!(d.changed_files.len(), 1);
         let fd = &d.changed_files[0];
+        assert!(fd.added.is_empty(), "{fd:?}");
+        assert!(fd.removed.is_empty(), "{fd:?}");
         assert!(fd.changed.is_empty());
+        assert_eq!(fd.kind_changed.len(), 1);
+        let kc = &fd.kind_changed[0];
+        assert_eq!(kc.name, "helper");
+        assert_eq!(kc.old_kind, "function");
+        assert_eq!(kc.new_kind, "method");
+        assert_eq!(kc.old_signature, "def helper()");
+        assert_eq!(kc.new_signature, "def helper(self)");
+    }
+
+    #[test]
+    fn ambiguous_same_name_is_not_paired() {
+        // Two same-named removed symbols (different kinds) make the match
+        // ambiguous → stay as plain add/remove, never a kind-change.
+        let old = vec![file(
+            "x.py",
+            vec![
+                pubf("dup", "def dup()"),
+                sym(SymbolKind::Class, "dup", "class dup", Visibility::Public),
+            ],
+            vec![],
+        )];
+        let new = vec![file(
+            "x.py",
+            vec![sym(
+                SymbolKind::Method,
+                "dup",
+                "def dup(self)",
+                Visibility::Public,
+            )],
+            vec![],
+        )];
+        let d = diff(&old, &new, &DiffOptions { no_private: false });
+        let fd = &d.changed_files[0];
+        assert!(fd.kind_changed.is_empty(), "{fd:?}");
+        // The added method and both removed decls stay as add/remove.
         assert_eq!(fd.added.len(), 1);
-        assert_eq!(fd.added[0].kind, "method");
-        assert_eq!(fd.removed.len(), 1);
-        assert_eq!(fd.removed[0].kind, "function");
+        assert_eq!(fd.removed.len(), 2);
     }
 
     #[test]
