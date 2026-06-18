@@ -169,6 +169,10 @@ pub struct ServeArgs {
     /// can pull a fresh map as a tool call.
     #[arg(long)]
     pub mcp: bool,
+    /// Confine `get_map` to this directory (default: current directory). A
+    /// requested path outside it is rejected (#102).
+    #[arg(long, value_name = "DIR")]
+    pub root: Option<PathBuf>,
 }
 
 /// Entry point called from `main`. Exits the process with a status code.
@@ -256,7 +260,8 @@ fn run_serve(args: ServeArgs) -> Result<(), i32> {
         eprintln!("atlas: serve currently supports only --mcp");
         return Err(2);
     }
-    crate::mcp::serve().map_err(|err| {
+    let root = args.root.unwrap_or_else(|| PathBuf::from("."));
+    crate::mcp::serve(&root).map_err(|err| {
         eprintln!("atlas: MCP server failed: {err}");
         1
     })

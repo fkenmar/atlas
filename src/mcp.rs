@@ -6,7 +6,7 @@
 //! loop over it. One tool, `get_map`, runs the map pipeline via [`build_map`].
 
 use std::io::{BufRead, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
@@ -16,7 +16,9 @@ use crate::budget::{pack, BudgetOptions, BudgetedMap, DEFAULT_BUDGET};
 const PROTOCOL_VERSION: &str = "2024-11-05";
 
 /// Run the stdio MCP server: one JSON-RPC message per line in, one per line out.
-pub fn serve() -> std::io::Result<()> {
+/// `root` confines every `get_map` to that subtree (#102) — a request for a path
+/// outside it is rejected.
+pub fn serve(root: &Path) -> std::io::Result<()> {
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
@@ -26,7 +28,7 @@ pub fn serve() -> std::io::Result<()> {
             continue;
         }
         let response = match serde_json::from_str::<Value>(&line) {
-            Ok(req) => handle(&req),
+            Ok(req) => handle(&req, root),
             Err(_) => Some(error(Value::Null, -32700, "Parse error")),
         };
         if let Some(response) = response {
@@ -42,7 +44,8 @@ pub fn serve() -> std::io::Result<()> {
 }
 
 /// Dispatch one JSON-RPC request to its response, or `None` for a notification.
-pub fn handle(req: &Value) -> Option<Value> {
+/// `root` is the confinement root for `get_map` (#102).
+pub fn handle(req: &Value, root: &Path) -> Option<Value> {
     let method = req.get("method").and_then(Value::as_str).unwrap_or("");
     let id = req.get("id").cloned().unwrap_or(Value::Null);
     let is_notification = req.get("id").is_none();
@@ -50,7 +53,7 @@ pub fn handle(req: &Value) -> Option<Value> {
     match method {
         "initialize" => Some(result(id, initialize_result())),
         "tools/list" => Some(result(id, json!({ "tools": [get_map_tool()] }))),
-        "tools/call" => Some(result(id, handle_tools_call(req))),
+        "tools/call" => Some(result(id, handle_tools_call(req, root))),
         "ping" => Some(result(id, json!({}))),
         // Notifications (no `id`) get no response — e.g. notifications/initialized.
         _ if is_notification => None,
@@ -87,7 +90,8 @@ fn get_map_tool() -> Value {
 
 /// Execute a `tools/call`. Tool-level failures come back as an `isError` result
 /// (so the model sees them); only the shape is a successful JSON-RPC result.
-fn handle_tools_call(req: &Value) -> Value {
+/// `root` confines `get_map` to its subtree (#102).
+fn handle_tools_call(req: &Value, root: &Path) -> Value {
     let params = req.get("params");
     let name = params
         .and_then(|p| p.get("name"))
@@ -116,14 +120,15 @@ fn handle_tools_call(req: &Value) -> Value {
         .and_then(Value::as_str)
         .unwrap_or("md");
 
-    match render_map(Path::new(path), budget, no_private, format) {
+    match render_map(path, root, budget, no_private, format) {
         Ok(text) => json!({ "content": [{ "type": "text", "text": text }], "isError": false }),
         Err(e) => tool_error(e),
     }
 }
 
 fn render_map(
-    path: &Path,
+    requested: &str,
+    root: &Path,
     budget: usize,
     no_private: bool,
     format: &str,
@@ -131,19 +136,43 @@ fn render_map(
     if budget == 0 {
         return Err("budget must be at least 1 token".to_string());
     }
-    let root = path
-        .canonicalize()
-        .map_err(|e| format!("cannot open {}: {e}", path.display()))?;
-    if !root.is_dir() {
-        return Err(format!("{} is not a directory", path.display()));
-    }
-    let map = build_map(&root, budget, no_private)?;
+    let target = confine(requested, root)?;
+    let map = build_map(&target, budget, no_private)?;
     Ok(match format {
         "json" => crate::render::json::render(&map),
         "xml" => crate::render::xml::render(&map),
         "md" => crate::render::markdown::render(&map),
         other => return Err(format!("unknown format {other:?} (md, json, or xml)")),
     })
+}
+
+/// Resolve `requested` (absolute, or relative to `root`) and confirm it is a
+/// directory *inside* `root` — rejecting traversal outside the configured root
+/// (#102). Symlinks are resolved (canonicalize) before the containment check, so
+/// a symlink pointing outside the root is also rejected.
+fn confine(requested: &str, root: &Path) -> Result<PathBuf, String> {
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|e| format!("server root {} is unavailable: {e}", root.display()))?;
+    let raw = Path::new(requested);
+    let joined = if raw.is_absolute() {
+        raw.to_path_buf()
+    } else {
+        canonical_root.join(raw)
+    };
+    let target = joined
+        .canonicalize()
+        .map_err(|e| format!("cannot open {requested}: {e}"))?;
+    if !target.starts_with(&canonical_root) {
+        return Err(format!(
+            "path {requested:?} is outside the allowed root {}",
+            canonical_root.display()
+        ));
+    }
+    if !target.is_dir() {
+        return Err(format!("{requested} is not a directory"));
+    }
+    Ok(target)
 }
 
 /// Run discover → parse → link → rank → budget for `root` (no `--focus`). The
@@ -160,9 +189,9 @@ fn build_map(root: &Path, budget: usize, no_private: bool) -> Result<BudgetedMap
             root.display()
         ));
     }
-    let mut cache = crate::cache::Cache::open(root);
-    let outcome = crate::parse::parse_all_cached(files, &mut cache);
-    cache.save();
+    // Read-only (#102): parse uncached so an agent's map pull never writes a
+    // `.atlas` cache into the target repo.
+    let outcome = crate::parse::parse_all(files);
     let graph = crate::link::link(&outcome.files);
     let ranking = crate::rank::rank(&graph, &[]);
     let counter = crate::budget::TiktokenCounter::cl100k()
@@ -213,9 +242,18 @@ mod tests {
         dir
     }
 
+    // A confinement root for the protocol-only tests (path is irrelevant there).
+    fn any_root() -> &'static Path {
+        Path::new(".")
+    }
+
     #[test]
     fn initialize_advertises_tools_and_server() {
-        let resp = handle(&json!({"jsonrpc":"2.0","id":1,"method":"initialize"})).unwrap();
+        let resp = handle(
+            &json!({"jsonrpc":"2.0","id":1,"method":"initialize"}),
+            any_root(),
+        )
+        .unwrap();
         assert_eq!(resp["id"], 1);
         assert_eq!(resp["result"]["protocolVersion"], PROTOCOL_VERSION);
         assert_eq!(resp["result"]["serverInfo"]["name"], "atlas");
@@ -224,7 +262,11 @@ mod tests {
 
     #[test]
     fn tools_list_has_get_map() {
-        let resp = handle(&json!({"jsonrpc":"2.0","id":2,"method":"tools/list"})).unwrap();
+        let resp = handle(
+            &json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
+            any_root(),
+        )
+        .unwrap();
         assert_eq!(resp["result"]["tools"][0]["name"], "get_map");
         assert_eq!(
             resp["result"]["tools"][0]["inputSchema"]["required"][0],
@@ -234,7 +276,7 @@ mod tests {
 
     #[test]
     fn ping_returns_empty_result() {
-        let resp = handle(&json!({"jsonrpc":"2.0","id":3,"method":"ping"})).unwrap();
+        let resp = handle(&json!({"jsonrpc":"2.0","id":3,"method":"ping"}), any_root()).unwrap();
         assert!(resp["result"].is_object());
         assert!(resp.get("error").is_none());
     }
@@ -242,31 +284,39 @@ mod tests {
     #[test]
     fn notification_gets_no_response() {
         // No `id` → a notification → no reply.
-        assert!(handle(&json!({"jsonrpc":"2.0","method":"notifications/initialized"})).is_none());
+        let req = json!({"jsonrpc":"2.0","method":"notifications/initialized"});
+        assert!(handle(&req, any_root()).is_none());
     }
 
     #[test]
     fn unknown_method_is_jsonrpc_error() {
-        let resp = handle(&json!({"jsonrpc":"2.0","id":4,"method":"does/not/exist"})).unwrap();
+        let req = json!({"jsonrpc":"2.0","id":4,"method":"does/not/exist"});
+        let resp = handle(&req, any_root()).unwrap();
         assert_eq!(resp["error"]["code"], -32601);
     }
 
     #[test]
     fn get_map_missing_path_is_tool_error() {
-        let resp = handle(&json!({
-            "jsonrpc":"2.0","id":5,"method":"tools/call",
-            "params": { "name": "get_map", "arguments": {} }
-        }))
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":5,"method":"tools/call",
+                "params": { "name": "get_map", "arguments": {} }
+            }),
+            any_root(),
+        )
         .unwrap();
         assert_eq!(resp["result"]["isError"], true);
     }
 
     #[test]
     fn get_map_unknown_tool_is_tool_error() {
-        let resp = handle(&json!({
-            "jsonrpc":"2.0","id":6,"method":"tools/call",
-            "params": { "name": "nope", "arguments": {} }
-        }))
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":6,"method":"tools/call",
+                "params": { "name": "nope", "arguments": {} }
+            }),
+            any_root(),
+        )
         .unwrap();
         assert_eq!(resp["result"]["isError"], true);
     }
@@ -275,17 +325,19 @@ mod tests {
     fn get_map_renders_a_real_tree() {
         let repo = temp_source_repo("map");
         let path = repo.to_string_lossy().to_string();
-        let resp = handle(&json!({
-            "jsonrpc":"2.0","id":7,"method":"tools/call",
-            "params": {
-                "name": "get_map",
-                "arguments": { "path": path, "budget": 1024 }
-            }
-        }))
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":7,"method":"tools/call",
+                "params": { "name": "get_map", "arguments": { "path": path, "budget": 1024 } }
+            }),
+            &repo,
+        )
         .unwrap();
         assert_eq!(resp["result"]["isError"], false);
         let text = resp["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("# atlas:"), "{text}");
+        // Read-only (#102): mapping must not write a .atlas cache into the repo.
+        assert!(!repo.join(".atlas").exists(), "MCP get_map wrote a cache");
         let _ = fs::remove_dir_all(repo);
     }
 
@@ -293,16 +345,36 @@ mod tests {
     fn get_map_json_format() {
         let repo = temp_source_repo("json");
         let path = repo.to_string_lossy().to_string();
-        let resp = handle(&json!({
-            "jsonrpc":"2.0","id":8,"method":"tools/call",
-            "params": {
-                "name": "get_map",
-                "arguments": { "path": path, "format": "json" }
-            }
-        }))
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":8,"method":"tools/call",
+                "params": { "name": "get_map", "arguments": { "path": path, "format": "json" } }
+            }),
+            &repo,
+        )
         .unwrap();
         let text = resp["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("\"version\":"), "{text}");
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn get_map_outside_root_is_rejected() {
+        // Confine to the repo, then request its parent — a traversal outside the
+        // allowed root (#102) → tool error, not a map.
+        let repo = temp_source_repo("escape");
+        let parent = repo.parent().unwrap().to_string_lossy().to_string();
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":9,"method":"tools/call",
+                "params": { "name": "get_map", "arguments": { "path": parent } }
+            }),
+            &repo,
+        )
+        .unwrap();
+        assert_eq!(resp["result"]["isError"], true);
+        let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("outside the allowed root"), "{text}");
         let _ = fs::remove_dir_all(repo);
     }
 }

@@ -21,7 +21,11 @@ benchmark delta.
   a tool call instead of being handed a static one. One tool, `get_map(path,
   budget?, no_private?, format?)`, returns the rendered map (md/json/xml).
   Hand-dispatched with `serde_json` (no framework); the protocol core is a pure,
-  unit-tested `handle()` function. See ADR 0008.
+  unit-tested `handle()` function. See ADR 0008. **Safety (#102):** `get_map` is
+  confined to `--root` (default: the server's working directory) — a requested
+  path that resolves outside it (including via `..` or symlinks) is rejected —
+  and it is strictly read-only: it parses uncached, so an agent's map pull never
+  writes a `.atlas` cache into the target repo.
 - **Experimental agent-output CLI polish (`dev`).** `atlas map` mode now has
   `-o/--output` for same-directory temp-file + rename writes, `--for-agent` for
   a short Markdown-only agent preamble, `--timings` for stage timings on stderr,
