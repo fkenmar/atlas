@@ -29,6 +29,34 @@ pub struct FileSummary {
     pub rel: String,
     pub lang: &'static str,
     pub symbol_count: usize,
+    /// How many of `symbol_count` are public — drives file-level severity
+    /// (a public-bearing file add/remove is more significant). (#107)
+    pub public_count: usize,
+}
+
+/// Heuristic significance of a structural change (#107). Not a type-checker
+/// guarantee — a conservative prioritization aid for reviewers and CI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Severity {
+    /// Public surface removed or its signature changed — likely API-breaking.
+    Breaking,
+    /// Public surface added or reclassified — worth a look, not breaking.
+    Notable,
+    /// Import/include edge changes only.
+    Informational,
+    /// Private-only changes — internal, no external surface affected.
+    Internal,
+}
+
+impl Severity {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Severity::Breaking => "breaking",
+            Severity::Notable => "notable",
+            Severity::Informational => "informational",
+            Severity::Internal => "internal",
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -49,6 +77,7 @@ pub struct SymbolLine {
     pub kind: &'static str,
     pub name: String,
     pub signature: String,
+    pub visibility: &'static str,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -57,6 +86,7 @@ pub struct SymbolChange {
     pub name: String,
     pub old_signature: String,
     pub new_signature: String,
+    pub visibility: &'static str,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -66,6 +96,58 @@ pub struct KindChange {
     pub new_kind: &'static str,
     pub old_signature: String,
     pub new_signature: String,
+    pub visibility: &'static str,
+}
+
+impl SymbolLine {
+    fn is_public(&self) -> bool {
+        self.visibility == "public"
+    }
+
+    /// Severity of this symbol's add (`removed == false`) or removal (#107):
+    /// removing public surface is breaking, adding it is notable, anything
+    /// private is internal.
+    pub fn severity(&self, removed: bool) -> Severity {
+        match (self.is_public(), removed) {
+            (true, true) => Severity::Breaking,
+            (true, false) => Severity::Notable,
+            (false, _) => Severity::Internal,
+        }
+    }
+}
+
+impl SymbolChange {
+    /// A signature change to public surface is breaking; private is internal.
+    pub fn severity(&self) -> Severity {
+        if self.visibility == "public" {
+            Severity::Breaking
+        } else {
+            Severity::Internal
+        }
+    }
+}
+
+impl KindChange {
+    /// A reclassification of public surface is notable; private is internal.
+    pub fn severity(&self) -> Severity {
+        if self.visibility == "public" {
+            Severity::Notable
+        } else {
+            Severity::Internal
+        }
+    }
+}
+
+impl FileSummary {
+    /// A file carrying public symbols is breaking on removal, notable on add;
+    /// a private-only file is internal either way.
+    pub fn severity(&self, removed: bool) -> Severity {
+        match (self.public_count > 0, removed) {
+            (true, true) => Severity::Breaking,
+            (true, false) => Severity::Notable,
+            (false, _) => Severity::Internal,
+        }
+    }
 }
 
 impl StructuralDiff {
@@ -133,14 +215,20 @@ fn file_summary(
     pf: &ParsedFile,
     opts: &DiffOptions,
 ) -> Option<FileSummary> {
-    let symbol_count = visible(pf, opts).count();
+    let visible: Vec<&Symbol> = visible(pf, opts).collect();
+    let symbol_count = visible.len();
     if opts.no_private && symbol_count == 0 {
         return None;
     }
+    let public_count = visible
+        .iter()
+        .filter(|s| matches!(s.visibility, Visibility::Public))
+        .count();
     Some(FileSummary {
         rel: rel.to_string(),
         lang,
         symbol_count,
+        public_count,
     })
 }
 
@@ -162,17 +250,31 @@ fn visible<'a>(pf: &'a ParsedFile, opts: &DiffOptions) -> impl Iterator<Item = &
 /// line, the same family as the overload fallback. Broadening identity to pair
 /// these is a deferred v2; `kind_change_reports_remove_and_add` pins the
 /// current behavior.
-fn group(pf: &ParsedFile, opts: &DiffOptions) -> BTreeMap<(&'static str, String), Vec<String>> {
-    let mut m: BTreeMap<(&'static str, String), Vec<String>> = BTreeMap::new();
+fn group(pf: &ParsedFile, opts: &DiffOptions) -> BTreeMap<(&'static str, String), Bucket> {
+    let mut m: BTreeMap<(&'static str, String), Bucket> = BTreeMap::new();
     for s in visible(pf, opts) {
-        m.entry((kind_name(s.kind), s.name.clone()))
-            .or_default()
-            .push(s.signature.clone());
+        let bucket = m
+            .entry((kind_name(s.kind), s.name.clone()))
+            .or_insert_with(|| Bucket {
+                sigs: Vec::new(),
+                visibility: "private",
+            });
+        bucket.sigs.push(s.signature.clone());
+        if matches!(s.visibility, Visibility::Public) {
+            bucket.visibility = "public";
+        }
     }
-    for sigs in m.values_mut() {
-        sigs.sort();
+    for b in m.values_mut() {
+        b.sigs.sort();
     }
     m
+}
+
+/// A `(kind, name)` bucket: its sorted signatures plus the bucket's visibility
+/// (public if any member is public — the conservative choice for severity).
+struct Bucket {
+    sigs: Vec<String>,
+    visibility: &'static str,
 }
 
 /// Compute one common file's delta, or `None` if nothing changed.
@@ -194,27 +296,29 @@ fn file_delta(
         let kind = key.0;
         let name = key.1.as_str();
         match (old_syms.get(key), new_syms.get(key)) {
-            (None, Some(news)) => removed_or_added(&mut added, kind, name, news),
-            (Some(olds), None) => removed_or_added(&mut removed, kind, name, olds),
+            (None, Some(news)) => emit_bucket(&mut added, kind, name, news),
+            (Some(olds), None) => emit_bucket(&mut removed, kind, name, olds),
             (Some(olds), Some(news)) => {
-                if olds == news {
-                    // unchanged
-                } else if olds.len() == 1 && news.len() == 1 {
+                if olds.sigs == news.sigs {
+                    // Unchanged (signature-identical). A visibility-only change
+                    // is not separately flagged in v1 (#107) — documented limit.
+                } else if olds.sigs.len() == 1 && news.sigs.len() == 1 {
                     changed.push(SymbolChange {
                         kind,
                         name: name.to_string(),
-                        old_signature: olds[0].clone(),
-                        new_signature: news[0].clone(),
+                        old_signature: olds.sigs[0].clone(),
+                        new_signature: news.sigs[0].clone(),
+                        visibility: news.visibility,
                     });
                 } else {
                     // Overload bucket: fall back to per-signature add/remove.
-                    let oset: BTreeSet<&String> = olds.iter().collect();
-                    let nset: BTreeSet<&String> = news.iter().collect();
-                    for sig in news.iter().filter(|s| !oset.contains(s)) {
-                        added.push(line(kind, name, sig));
+                    let oset: BTreeSet<&String> = olds.sigs.iter().collect();
+                    let nset: BTreeSet<&String> = news.sigs.iter().collect();
+                    for sig in news.sigs.iter().filter(|s| !oset.contains(s)) {
+                        added.push(line(kind, name, sig, news.visibility));
                     }
-                    for sig in olds.iter().filter(|s| !nset.contains(s)) {
-                        removed.push(line(kind, name, sig));
+                    for sig in olds.sigs.iter().filter(|s| !nset.contains(s)) {
+                        removed.push(line(kind, name, sig, olds.visibility));
                     }
                 }
             }
@@ -258,9 +362,9 @@ fn file_delta(
     }
 }
 
-fn removed_or_added(dst: &mut Vec<SymbolLine>, kind: &'static str, name: &str, sigs: &[String]) {
-    for sig in sigs {
-        dst.push(line(kind, name, sig));
+fn emit_bucket(dst: &mut Vec<SymbolLine>, kind: &'static str, name: &str, bucket: &Bucket) {
+    for sig in &bucket.sigs {
+        dst.push(line(kind, name, sig, bucket.visibility));
     }
 }
 
@@ -296,6 +400,7 @@ fn pair_kind_changes(
                     new_kind: a.kind,
                     old_signature: r.signature.clone(),
                     new_signature: a.signature.clone(),
+                    visibility: a.visibility,
                 });
             }
         }
@@ -306,11 +411,12 @@ fn pair_kind_changes(
     changes
 }
 
-fn line(kind: &'static str, name: &str, sig: &str) -> SymbolLine {
+fn line(kind: &'static str, name: &str, sig: &str, visibility: &'static str) -> SymbolLine {
     SymbolLine {
         kind,
         name: name.to_string(),
         signature: sig.to_string(),
+        visibility,
     }
 }
 

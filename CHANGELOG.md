@@ -31,10 +31,11 @@ benchmark delta.
   a short Markdown-only agent preamble, `--timings` for stage timings on stderr,
   and empty-map diagnostics that report the top file extensions atlas saw. Normal
   stdout output is unchanged unless a new flag is used.
-- **Experimental MCP stdio server (`atlas serve --mcp`, #7).** Adds a
-  hand-dispatched JSON-RPC/MCP path with `initialize`, `tools/list`,
-  `tools/call`, `ping`, and one read-only `get_map` tool that returns Markdown,
-  JSON, or XML map content. Uses `serde_json` only; see ADR 0008.
+- **Launch and growth readiness docs.** Adds a comparison page versus Repomix,
+  Gitingest, Aider repo map, ctags/tree-sitter, and file dumps; a launch
+  checklist; a growth research memo; `llms.txt`; Claude Code MCP setup docs with
+  an example config; `SECURITY.md`; `CODE_OF_CONDUCT.md`; and a GitHub
+  generated-release-notes config.
 - **Tier 2 language grammars: Go, Java, C, C++ (#10).** atlas now maps Go
   (`.go`), Java (`.java`), and C/C++ (`.c`/`.h`/`.cpp`/`.hpp`/…) alongside the
   Tier 1 set (Python, TypeScript/JavaScript, Rust) — functions/methods, types
@@ -60,6 +61,11 @@ benchmark delta.
     into an `impl`, function → method) is paired into a single `±` change entry
     instead of an unexplained remove + add (ADR 0006, #17). Conservative: only
     unique-name 1↔1 matches pair; overloads stay as add/remove.
+  - Each change carries a heuristic **severity** — breaking (public removed or
+    signature-changed), notable (public added/reclassified), informational
+    (import-edge changes), internal (private-only) — shown as a Markdown summary
+    line and a per-change `severity` field in JSON/XML (additive, no version
+    bump). Conservative and explicitly not a type-checker guarantee (#107).
 - **XML renderer (`--format xml`).** A third output format alongside Markdown
   and JSON, for prompt-injection-safe wrapping in Claude prompts: a well-formed
   XML document where signatures/paths are escaped per the XML 1.0 spec so

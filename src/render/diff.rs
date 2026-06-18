@@ -4,7 +4,9 @@
 
 use std::fmt::Write as _;
 
-use crate::diff::{FileDelta, FileSummary, KindChange, StructuralDiff, SymbolChange, SymbolLine};
+use crate::diff::{
+    FileDelta, FileSummary, KindChange, Severity, StructuralDiff, SymbolChange, SymbolLine,
+};
 use crate::parse::ParseStats;
 use crate::render::json::json_str;
 use crate::render::xml::xml_escape;
@@ -37,6 +39,17 @@ pub fn render(
         push_skip_footer(&mut out, "new", new_stats);
         return out;
     }
+
+    // Severity summary (#107) — a heuristic prioritization aid, not a
+    // type-checker guarantee.
+    let counts = tally_severities(diff);
+    out.push('\n');
+    let _ = writeln!(
+        out,
+        "severity: {} breaking, {} notable, {} informational, {} internal \
+         (heuristic, not a type-checker)",
+        counts[0], counts[1], counts[2], counts[3]
+    );
 
     if !diff.added_files.is_empty() {
         out.push('\n');
@@ -104,6 +117,44 @@ pub fn render(
     out
 }
 
+fn sev_index(s: Severity) -> usize {
+    match s {
+        Severity::Breaking => 0,
+        Severity::Notable => 1,
+        Severity::Informational => 2,
+        Severity::Internal => 3,
+    }
+}
+
+/// Count every change's severity as `[breaking, notable, informational,
+/// internal]` (#107).
+fn tally_severities(diff: &StructuralDiff) -> [usize; 4] {
+    let mut counts = [0usize; 4];
+    for f in &diff.added_files {
+        counts[sev_index(f.severity(false))] += 1;
+    }
+    for f in &diff.removed_files {
+        counts[sev_index(f.severity(true))] += 1;
+    }
+    for fd in &diff.changed_files {
+        for c in &fd.changed {
+            counts[sev_index(c.severity())] += 1;
+        }
+        for k in &fd.kind_changed {
+            counts[sev_index(k.severity())] += 1;
+        }
+        for s in &fd.added {
+            counts[sev_index(s.severity(false))] += 1;
+        }
+        for s in &fd.removed {
+            counts[sev_index(s.severity(true))] += 1;
+        }
+        // Import-edge changes are informational.
+        counts[2] += fd.added_imports.len() + fd.removed_imports.len();
+    }
+    counts
+}
+
 /// Append the FR-12 skip/unwired footer for one side, only when nonzero.
 fn push_skip_footer(out: &mut String, side: &str, stats: &ParseStats) {
     if stats.skipped_files > 0 || stats.unwired_files > 0 {
@@ -125,8 +176,12 @@ pub fn render_json(
     old_stats: &ParseStats,
     new_stats: &ParseStats,
 ) -> String {
-    let added = json_arr(&diff.added_files, file_summary_json);
-    let removed = json_arr(&diff.removed_files, file_summary_json);
+    let added = json_arr(&diff.added_files, |f: &FileSummary| {
+        file_summary_json(f, f.severity(false))
+    });
+    let removed = json_arr(&diff.removed_files, |f: &FileSummary| {
+        file_summary_json(f, f.severity(true))
+    });
     let changed = json_arr(&diff.changed_files, file_delta_json);
     let mut out = String::new();
     out.push_str("{\n");
@@ -153,38 +208,45 @@ fn json_arr<T>(items: &[T], f: fn(&T) -> String) -> String {
     format!("[{}]", items.iter().map(f).collect::<Vec<_>>().join(", "))
 }
 
-fn file_summary_json(f: &FileSummary) -> String {
+fn file_summary_json(f: &FileSummary, severity: Severity) -> String {
     format!(
-        "{{\"path\": {}, \"lang\": {}, \"symbols\": {}}}",
+        "{{\"path\": {}, \"lang\": {}, \"symbols\": {}, \"severity\": {}}}",
         json_str(&f.rel),
         json_str(f.lang),
-        f.symbol_count
+        f.symbol_count,
+        json_str(severity.as_str())
     )
 }
 
 fn file_delta_json(fd: &FileDelta) -> String {
     let changed = json_arr(&fd.changed, |c: &SymbolChange| {
         format!(
-            "{{\"kind\": {}, \"name\": {}, \"old_sig\": {}, \"new_sig\": {}}}",
+            "{{\"kind\": {}, \"name\": {}, \"old_sig\": {}, \"new_sig\": {}, \"severity\": {}}}",
             json_str(c.kind),
             json_str(&c.name),
             json_str(&c.old_signature),
-            json_str(&c.new_signature)
+            json_str(&c.new_signature),
+            json_str(c.severity().as_str())
         )
     });
     let kind_changed = json_arr(&fd.kind_changed, |k: &KindChange| {
         format!(
             "{{\"name\": {}, \"old_kind\": {}, \"new_kind\": {}, \
-             \"old_sig\": {}, \"new_sig\": {}}}",
+             \"old_sig\": {}, \"new_sig\": {}, \"severity\": {}}}",
             json_str(&k.name),
             json_str(k.old_kind),
             json_str(k.new_kind),
             json_str(&k.old_signature),
-            json_str(&k.new_signature)
+            json_str(&k.new_signature),
+            json_str(k.severity().as_str())
         )
     });
-    let added = json_arr(&fd.added, symbol_line_json);
-    let removed = json_arr(&fd.removed, symbol_line_json);
+    let added = json_arr(&fd.added, |s: &SymbolLine| {
+        symbol_line_json(s, s.severity(false))
+    });
+    let removed = json_arr(&fd.removed, |s: &SymbolLine| {
+        symbol_line_json(s, s.severity(true))
+    });
     let added_imports = json_arr(&fd.added_imports, |i: &String| json_str(i));
     let removed_imports = json_arr(&fd.removed_imports, |i: &String| json_str(i));
     format!(
@@ -195,12 +257,13 @@ fn file_delta_json(fd: &FileDelta) -> String {
     )
 }
 
-fn symbol_line_json(s: &SymbolLine) -> String {
+fn symbol_line_json(s: &SymbolLine, severity: Severity) -> String {
     format!(
-        "{{\"kind\": {}, \"name\": {}, \"sig\": {}}}",
+        "{{\"kind\": {}, \"name\": {}, \"sig\": {}, \"severity\": {}}}",
         json_str(s.kind),
         json_str(&s.name),
-        json_str(&s.signature)
+        json_str(&s.signature),
+        json_str(severity.as_str())
     )
 }
 
@@ -229,8 +292,8 @@ pub fn render_xml(
         xml_escape(new_label, true)
     );
 
-    xml_file_list(&mut out, "added-files", &diff.added_files);
-    xml_file_list(&mut out, "removed-files", &diff.removed_files);
+    xml_file_list(&mut out, "added-files", &diff.added_files, false);
+    xml_file_list(&mut out, "removed-files", &diff.removed_files, true);
 
     if diff.changed_files.is_empty() {
         out.push_str("  <changed-files/>\n");
@@ -250,7 +313,7 @@ pub fn render_xml(
     out
 }
 
-fn xml_file_list(out: &mut String, tag: &str, files: &[FileSummary]) {
+fn xml_file_list(out: &mut String, tag: &str, files: &[FileSummary], removed: bool) {
     if files.is_empty() {
         let _ = writeln!(out, "  <{tag}/>");
         return;
@@ -259,10 +322,11 @@ fn xml_file_list(out: &mut String, tag: &str, files: &[FileSummary]) {
     for f in files {
         let _ = writeln!(
             out,
-            "    <file path=\"{}\" lang=\"{}\" symbols=\"{}\"/>",
+            "    <file path=\"{}\" lang=\"{}\" symbols=\"{}\" severity=\"{}\"/>",
             xml_escape(&f.rel, true),
             xml_escape(f.lang, true),
-            f.symbol_count
+            f.symbol_count,
+            f.severity(removed).as_str()
         );
     }
     let _ = writeln!(out, "  </{tag}>");
@@ -273,43 +337,46 @@ fn xml_file_delta(out: &mut String, fd: &FileDelta) {
     for c in &fd.changed {
         let _ = writeln!(
             out,
-            "      <changed kind=\"{}\" name=\"{}\" old-sig=\"{}\" new-sig=\"{}\"/>",
+            "      <changed kind=\"{}\" name=\"{}\" old-sig=\"{}\" new-sig=\"{}\" severity=\"{}\"/>",
             xml_escape(c.kind, true),
             xml_escape(&c.name, true),
             xml_escape(&c.old_signature, true),
-            xml_escape(&c.new_signature, true)
+            xml_escape(&c.new_signature, true),
+            c.severity().as_str()
         );
     }
     for k in &fd.kind_changed {
         let _ = writeln!(
             out,
             "      <kind-changed name=\"{}\" old-kind=\"{}\" new-kind=\"{}\" \
-             old-sig=\"{}\" new-sig=\"{}\"/>",
+             old-sig=\"{}\" new-sig=\"{}\" severity=\"{}\"/>",
             xml_escape(&k.name, true),
             xml_escape(k.old_kind, true),
             xml_escape(k.new_kind, true),
             xml_escape(&k.old_signature, true),
-            xml_escape(&k.new_signature, true)
+            xml_escape(&k.new_signature, true),
+            k.severity().as_str()
         );
     }
     for s in &fd.added {
-        xml_symbol_line(out, "added", s);
+        xml_symbol_line(out, "added", s, false);
     }
     for s in &fd.removed {
-        xml_symbol_line(out, "removed", s);
+        xml_symbol_line(out, "removed", s, true);
     }
     xml_import_list(out, "added-imports", &fd.added_imports);
     xml_import_list(out, "removed-imports", &fd.removed_imports);
     out.push_str("    </file>\n");
 }
 
-fn xml_symbol_line(out: &mut String, tag: &str, s: &SymbolLine) {
+fn xml_symbol_line(out: &mut String, tag: &str, s: &SymbolLine, removed: bool) {
     let _ = writeln!(
         out,
-        "      <{tag} kind=\"{}\" name=\"{}\" sig=\"{}\"/>",
+        "      <{tag} kind=\"{}\" name=\"{}\" sig=\"{}\" severity=\"{}\"/>",
         xml_escape(s.kind, true),
         xml_escape(&s.name, true),
-        xml_escape(&s.signature, true)
+        xml_escape(&s.signature, true),
+        s.severity(removed).as_str()
     );
 }
 
@@ -344,11 +411,13 @@ mod tests {
                 rel: "b.py".to_string(),
                 lang: "python",
                 symbol_count: 2,
+                public_count: 2,
             }],
             removed_files: vec![FileSummary {
                 rel: "a.py".to_string(),
                 lang: "python",
                 symbol_count: 1,
+                public_count: 1,
             }],
             changed_files: vec![FileDelta {
                 rel: "x.py".to_string(),
@@ -356,17 +425,20 @@ mod tests {
                     kind: "function",
                     name: "h".to_string(),
                     signature: "def h()".to_string(),
+                    visibility: "public",
                 }],
                 removed: vec![SymbolLine {
                     kind: "function",
                     name: "g".to_string(),
                     signature: "def g()".to_string(),
+                    visibility: "public",
                 }],
                 changed: vec![SymbolChange {
                     kind: "function",
                     name: "f".to_string(),
                     old_signature: "def f(x)".to_string(),
                     new_signature: "def f(x, y)".to_string(),
+                    visibility: "public",
                 }],
                 kind_changed: vec![KindChange {
                     name: "k".to_string(),
@@ -374,6 +446,7 @@ mod tests {
                     new_kind: "method",
                     old_signature: "def k()".to_string(),
                     new_signature: "def k(self)".to_string(),
+                    visibility: "public",
                 }],
                 added_imports: vec!["c".to_string()],
                 removed_imports: vec!["a".to_string()],
@@ -524,7 +597,7 @@ mod tests {
         assert!(
             out.contains(
                 "<kind-changed name=\"k\" old-kind=\"function\" new-kind=\"method\" \
-                 old-sig=\"def k()\" new-sig=\"def k(self)\"/>"
+                 old-sig=\"def k()\" new-sig=\"def k(self)\" severity=\"notable\"/>"
             ),
             "{out}"
         );
