@@ -32,7 +32,7 @@ without reading every file. Docs: https://github.com/fkenmar/atlas";
     about = "Compile a codebase into a token-budgeted structural map for LLM coding agents",
     long_about = "Walks a repository, extracts every signature, type, and import edge \
 (never function bodies), ranks files by how central they are to the codebase, packs the \
-most important files into a token budget, and prints a Markdown (or JSON) map to stdout — \
+most important files into a token budget, and prints a Markdown (or JSON/XML) map to stdout — \
 ready to drop into an LLM coding agent's context.",
     after_help = EXAMPLES
 )]
@@ -45,7 +45,7 @@ pub struct Cli {
     #[arg(short, long, default_value_t = DEFAULT_BUDGET, value_name = "N")]
     pub budget: usize,
 
-    /// Output format: md (default) or json.
+    /// Output format: md (default), json, or xml.
     #[arg(short, long, value_enum, default_value_t = Format::Md)]
     pub format: Format,
 
@@ -89,6 +89,8 @@ pub enum Format {
     Md,
     /// Versioned, stable JSON schema for programmatic consumers.
     Json,
+    /// Well-formed XML for prompt-injection-safe wrapping in Claude prompts.
+    Xml,
 }
 
 /// Entry point called from `main`. Exits the process with a status code.
@@ -210,8 +212,10 @@ fn run_with(cli: Cli) -> Result<(), i32> {
                 print!("{md}");
             }
         }
-        // JSON is structured data for programmatic consumers — never colorized.
+        // JSON and XML are structured data for programmatic consumers — never
+        // colorized.
         Format::Json => print!("{}", crate::render::json::render(&map)),
+        Format::Xml => print!("{}", crate::render::xml::render(&map)),
     }
     Ok(())
 }
@@ -386,8 +390,8 @@ mod tests {
         assert!(Cli::try_parse_from(["atlas", "--budget", "notanumber"]).is_err());
         assert_eq!(parse(&["atlas", "--format", "json"]).format, Format::Json);
         assert_eq!(parse(&["atlas", "--format", "md"]).format, Format::Md);
-        // xml lands in M3.
-        assert!(Cli::try_parse_from(["atlas", "--format", "xml"]).is_err());
+        assert_eq!(parse(&["atlas", "--format", "xml"]).format, Format::Xml);
+        assert!(Cli::try_parse_from(["atlas", "--format", "bogus"]).is_err());
     }
 
     #[test]

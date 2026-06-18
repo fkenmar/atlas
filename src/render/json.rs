@@ -111,7 +111,7 @@ fn render_symbol(s: &RenderedSymbol) -> String {
     )
 }
 
-fn kind_name(kind: SymbolKind) -> &'static str {
+pub(crate) fn kind_name(kind: SymbolKind) -> &'static str {
     match kind {
         SymbolKind::Function => "function",
         SymbolKind::Method => "method",
@@ -125,14 +125,14 @@ fn kind_name(kind: SymbolKind) -> &'static str {
     }
 }
 
-fn visibility_name(v: Visibility) -> &'static str {
+pub(crate) fn visibility_name(v: Visibility) -> &'static str {
     match v {
         Visibility::Public => "public",
         Visibility::Private => "private",
     }
 }
 
-fn detail_name(d: Detail) -> &'static str {
+pub(crate) fn detail_name(d: Detail) -> &'static str {
     match d {
         Detail::Full => "full",
         Detail::NoPrivate => "public-only",

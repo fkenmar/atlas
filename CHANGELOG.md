@@ -8,6 +8,15 @@ benchmark delta.
 
 ## [Unreleased]
 
+### Added
+- **XML renderer (`--format xml`).** A third output format alongside Markdown
+  and JSON, for prompt-injection-safe wrapping in Claude prompts: a well-formed
+  XML document where signatures/paths are escaped per the XML 1.0 spec so
+  embedded source can't break out of the structure. It describes the *same*
+  logical schema as the JSON renderer (shares the schema version and the
+  kind/visibility/detail vocabulary), and output stays deterministic (NFR-4).
+  Closes the last output-format item on the board (#11).
+
 ## [0.2.1-alpha] - 2026-06-17
 
 Terminal polish, and the fix that makes the pip publish actually land.

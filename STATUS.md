@@ -114,6 +114,28 @@ host build. **RL** evaluated and parked (ideas.md) — does not fit the structur
 
 Renamed the project to **atlas** end-to-end (crate, binary, map header, CLI messages, cache dir `.repomap`→`.atlas`, ignore file `.atlasignore`) — the binary is now `atlas`, `cargo install --path .` works. Made it usable for a general audience: rewrote README (problem-first, real example output, simple install/usage), added MIT `LICENSE`, added `repository`/`readme`/`keywords`/`categories` to Cargo.toml, added 10 GitHub topics for discoverability. Gate green (68 tests, clippy clean). **80% token-reduction goal paused at the measured ~70%** per maintainer ("stop around 70% for now"); the N≥5 benchmark to confirm the aggregate remains the open decisive measurement when the goal resumes. Local git remote still points at the old `RepoBrain.git` (push works via GitHub redirect; rewrite to `atlas.git` is a one-liner the maintainer can run). A tagged `v0.1.0` GitHub release is the natural next shipping step (gated on the M1 benchmark-win criterion).
 
+## XML renderer — first M3 deliverable (2026-06-18, closes #11)
+
+`atlas --format xml` now joins md/json — a third output format for
+prompt-injection-safe wrapping in Claude prompts (PRD §6/FR-5). Well-formed XML
+where signatures/paths are escaped per the XML 1.0 spec so embedded source can't
+break out; describes the *same* logical schema as the JSON renderer (shares
+`SCHEMA_VERSION` + the kind/visibility/detail vocabulary, made `pub(crate)`), so
+the two structured formats don't drift. No new dependency (hand-rolled escaper,
+matching `json_str`); not a ranking/budget change, so no `/bench`. TDD'd (genuine
+RED) and hardened by an adversarial review workflow (8 confirmed findings fixed):
+- **Blocker fixed** — the escaper now drops the full set of code points illegal in
+  the XML 1.0 `Char` production (C0 controls, U+FFFE/U+FFFF, the BMP gap), not
+  just `<0x20`. A real Python source file with U+FFFE in a default-arg string
+  previously yielded malformed XML; now it parses (verified end-to-end with
+  Python's expat).
+- Attribute tab/newline/CR → numeric refs (`&#9;` …) so they survive XML
+  attribute-value normalization (JSON-parity, no silent corruption).
+- Collapsed-dir attribute renamed `path`→`dir` to mirror the JSON key.
+Gate green: 79 lib tests (+9 xml: schema/escaping/determinism/adversarial
+round-trip), clippy clean, real-parser validation on the 5,285-LOC self-map.
+M3 board cell trimmed to "Tier 2 grammars, atlas diff."
+
 ## Board
 
 | NOW | NEXT | NOT-YET |
@@ -122,7 +144,7 @@ Renamed the project to **atlas** end-to-end (crate, binary, map header, CLI mess
 | ~~Rust grammar (tree-sitter-rust)~~ ✅ done 2026-06-16 | rayon parallel parse (M1) | --watch daemon (M2) |
 | ~~Import linking → index-based graph (ADR 0002)~~ ✅ done 2026-06-16 | clap CLI: --budget/--format/--focus (M1; opens the CI self-map gate) | --focus personalization (M2) |
 | ~~PageRank over the graph~~ ✅ done 2026-06-16 | ~~.gitignore/.repomapignore in discover (FR-7)~~ ✅ done 2026-06-16 | cargo-dist packaging (M2) |
-| ~~tiktoken budgeting + degradation ladder~~ ✅ code done 2026-06-16 (bench owed at integration) | Refine exploration-token metric toward PRD definition (tokens before first correct edit) | Tier 2 grammars, XML renderer, repomap diff (M3) |
+| ~~tiktoken budgeting + degradation ladder~~ ✅ code done 2026-06-16 (bench owed at integration) | Refine exploration-token metric toward PRD definition (tokens before first correct edit) | Tier 2 grammars, atlas diff (M3) |
 | ~~clap CLI + full pipeline wired (discover→…→render)~~ ✅ done 2026-06-16 | | |
 | ~~Exclude inline #[cfg(test)] code from extraction~~ ✅ done 2026-06-16 (self-map: 2036 tok degraded → 1749 tok at FULL detail, 16/16 files) | | |
 | Checkpoint benchmark (pytest with-map vs baseline) ← next | | |

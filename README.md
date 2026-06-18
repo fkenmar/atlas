@@ -107,6 +107,7 @@ atlas . --focus src/auth         # rank the files you're working on higher
 atlas . --lang py,rs             # only these languages
 atlas . --no-private             # public API surface only
 atlas . --format json            # JSON instead of Markdown
+atlas . --format xml             # XML, for wrapping in a Claude prompt
 atlas . --color always           # force ANSI color (auto-detects a terminal otherwise)
 ```
 
