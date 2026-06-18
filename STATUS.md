@@ -174,6 +174,16 @@ Gate green: 79 lib tests (+9 xml: schema/escaping/determinism/adversarial
 round-trip), clippy clean, real-parser validation on the 5,285-LOC self-map.
 M3 board cell trimmed to "Tier 2 grammars, atlas diff."
 
+## MCP server — `atlas serve --mcp` (2026-06-18, closes #7)
+
+atlas now runs as an **MCP server over stdio** (newline-delimited JSON-RPC 2.0),
+so an agent can pull a fresh map as a tool call (`get_map(path, budget?,
+no_private?, format?)` → md/json/xml) instead of being handed a static one.
+serde_json only — hand-dispatched, no framework; the protocol core is a pure,
+unit-tested `handle()` (9 tests) and `serve()` is a thin stdin loop. Routed
+git-style in `run()` (ADR 0008), reusing a local `build_map` pipeline. Verified
+end-to-end over real stdio. First M2 integration item shipped.
+
 ## Tier 2 grammars — Go / Java / C / C++ (2026-06-18, closes #10)
 
 atlas now maps **Go, Java, C, and C++** alongside Tier 1 (Python/TS/Rust) —
@@ -197,7 +207,7 @@ did not finish before a session limit — re-run when convenient.)
 
 | NOW | NEXT | NOT-YET |
 |---|---|---|
-| ~~TS/JS grammar (tree-sitter-typescript)~~ ✅ done 2026-06-16 | ~~Incremental cache + warm path~~ ✅ done 2026-06-16 (FR-6) | MCP server (M2) |
+| ~~TS/JS grammar (tree-sitter-typescript)~~ ✅ done 2026-06-16 | ~~Incremental cache + warm path~~ ✅ done 2026-06-16 (FR-6) | ~~MCP server~~ ✅ done 2026-06-18 (#7) |
 | ~~Rust grammar (tree-sitter-rust)~~ ✅ done 2026-06-16 | ~~rayon parallel parse~~ ✅ done 2026-06-18 (#4) | --watch daemon (M2) |
 | ~~Import linking → index-based graph (ADR 0002)~~ ✅ done 2026-06-16 | clap CLI: --budget/--format/--focus (M1; opens the CI self-map gate) | --focus personalization (M2) |
 | ~~PageRank over the graph~~ ✅ done 2026-06-16 | ~~.gitignore/.repomapignore in discover (FR-7)~~ ✅ done 2026-06-16 | cargo-dist packaging (M2) |
