@@ -40,6 +40,7 @@ tree-sitter-go = "0.25.0"
 tree-sitter-java = "0.23.5"
 tree-sitter-c = "0.24.2"
 tree-sitter-cpp = "0.23.4"
+rayon = "1.10"
 
 # The profile that 'dist' will build with
 [profile.dist]

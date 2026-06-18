@@ -8,6 +8,13 @@ benchmark delta.
 
 ## [Unreleased]
 
+### Changed
+- **Parallel parsing (rayon, #4).** The parse stage now runs the expensive
+  tree-sitter parse of cache-miss files across cores via rayon, while cache
+  access and output assembly stay sequential so the map remains deterministic
+  (NFR-4). Cold-path speedup on large repos; warm (fully cached) runs are
+  unaffected. Verified cold==warm output and run-to-run determinism.
+
 ### Added
 - **Tier 2 language grammars: Go, Java, C, C++ (#10).** atlas now maps Go
   (`.go`), Java (`.java`), and C/C++ (`.c`/`.h`/`.cpp`/`.hpp`/…) alongside the

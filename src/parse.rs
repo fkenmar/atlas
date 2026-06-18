@@ -1,13 +1,16 @@
 //! Stage 2 — parse: per-file tree-sitter parse extracting declarations via
 //! the embedded `queries/<lang>/tags.scm` query files.
 //!
-//! Serial in M0; rayon parallelism lands in M1. Unparseable files are
-//! skipped and counted, never a panic (FR-12). Files whose language grammar
-//! isn't wired yet (TS/JS, Rust until M1) are counted separately.
+//! Unparseable files are skipped and counted, never a panic (FR-12). Files
+//! whose language grammar isn't wired yet are counted separately. The expensive
+//! tree-sitter parse of cache-miss files runs in parallel (rayon), while cache
+//! access and output assembly stay sequential to keep output deterministic
+//! (NFR-4).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
+use rayon::prelude::*;
 use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 
 use crate::cache::Cache;
@@ -115,23 +118,59 @@ pub fn parse_all(files: Vec<SourceFile>) -> ParseOutcome {
 /// is computed from the single read this function already performs, so the
 /// warm path never reads a file twice.
 pub fn parse_all_cached(files: Vec<SourceFile>, cache: &mut Cache) -> ParseOutcome {
+    // Phase 1 (sequential): read each file and classify it. Cache lookups need
+    // `&mut Cache`, and the read is cheap next to the parse, so this stays
+    // sequential.
+    let mut slots: Vec<(SourceFile, Slot)> = Vec::with_capacity(files.len());
+    for file in files {
+        let slot = if file.lang.grammar().is_none() {
+            Slot::Unwired
+        } else if let Ok(source) = std::fs::read_to_string(&file.path) {
+            let hash = crate::cache::content_hash(&source);
+            match cache.get(&file.rel, hash) {
+                Some(parsed) => Slot::Ready(parsed),
+                None => Slot::ToParse { source, hash },
+            }
+        } else {
+            Slot::Skipped
+        };
+        slots.push((file, slot));
+    }
+
+    // Phase 2 (parallel): run the expensive tree-sitter parse on the cache
+    // misses. `parse_source` is pure, so this is embarrassingly parallel; results
+    // are keyed by slot index so assembly stays ordered.
+    let mut parsed_misses: Vec<Option<ParsedFile>> = (0..slots.len()).map(|_| None).collect();
+    let results: Vec<(usize, ParsedFile)> = slots
+        .par_iter()
+        .enumerate()
+        .filter_map(|(i, (file, slot))| match slot {
+            Slot::ToParse { source, .. } => parse_source(file, source).map(|p| (i, p)),
+            _ => None,
+        })
+        .collect();
+    for (i, parsed) in results {
+        parsed_misses[i] = Some(parsed);
+    }
+
+    // Phase 3 (sequential): assemble in input order, updating the cache and
+    // stats. A miss with no parse result failed to parse → skipped (FR-12).
     let mut out = ParseOutcome {
-        files: Vec::new(),
+        files: Vec::with_capacity(slots.len()),
         stats: ParseStats::default(),
     };
-    for file in files {
-        if file.lang.grammar().is_none() {
-            out.stats.unwired_files += 1;
-            continue;
-        }
-        let Ok(source) = std::fs::read_to_string(&file.path) else {
-            out.stats.skipped_files += 1;
-            continue;
-        };
-        let hash = crate::cache::content_hash(&source);
-        let parsed = match cache.get(&file.rel, hash) {
-            Some(parsed) => parsed,
-            None => match parse_source(&file, &source) {
+    for (idx, (file, slot)) in slots.into_iter().enumerate() {
+        let parsed = match slot {
+            Slot::Unwired => {
+                out.stats.unwired_files += 1;
+                continue;
+            }
+            Slot::Skipped => {
+                out.stats.skipped_files += 1;
+                continue;
+            }
+            Slot::Ready(parsed) => parsed,
+            Slot::ToParse { hash, .. } => match parsed_misses[idx].take() {
                 Some(parsed) => {
                     cache.insert(&file.rel, hash, &parsed);
                     parsed
@@ -147,6 +186,18 @@ pub fn parse_all_cached(files: Vec<SourceFile>, cache: &mut Cache) -> ParseOutco
         out.files.push((file, parsed));
     }
     out
+}
+
+/// Per-file classification from Phase 1 of [`parse_all_cached`].
+enum Slot {
+    /// Language grammar not wired (counted, not parsed).
+    Unwired,
+    /// Unreadable / non-UTF-8 file (counted, not parsed).
+    Skipped,
+    /// Cache hit — reuse the stored parse.
+    Ready(ParsedFile),
+    /// Cache miss — parse `source` in parallel, then cache under `hash`.
+    ToParse { source: String, hash: u64 },
 }
 
 /// Parse one file with the tree-sitter grammar for its language.
