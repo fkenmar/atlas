@@ -22,6 +22,18 @@ pub struct StructuralDiff {
     pub added_files: Vec<FileSummary>,
     pub removed_files: Vec<FileSummary>,
     pub changed_files: Vec<FileDelta>,
+    /// Files detected as renamed/moved — a removed and an added file with an
+    /// identical, uniquely-matched symbol set (#106). Conservative: any
+    /// ambiguity keeps them as separate add/remove.
+    pub moved_files: Vec<MovedFile>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct MovedFile {
+    pub old_rel: String,
+    pub new_rel: String,
+    pub lang: &'static str,
+    pub symbol_count: usize,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -153,7 +165,8 @@ impl FileSummary {
 impl StructuralDiff {
     /// True when nothing changed structurally between the two trees.
     pub fn is_empty(&self) -> bool {
-        self.added_files.is_empty()
+        self.moved_files.is_empty()
+            && self.added_files.is_empty()
             && self.removed_files.is_empty()
             && self.changed_files.is_empty()
     }
@@ -191,11 +204,104 @@ pub fn diff(
         }
     }
 
+    // Pair renamed/moved files (identical, uniquely-matched symbol sets) out of
+    // the add/remove lists (#106).
+    let moved_files = detect_file_moves(
+        &mut removed_files,
+        &mut added_files,
+        &old_idx,
+        &new_idx,
+        opts,
+    );
+
     StructuralDiff {
         added_files,
         removed_files,
         changed_files,
+        moved_files,
     }
+}
+
+/// A file's fingerprint for move detection: its sorted visible `(kind, name,
+/// signature)` set, joined. Two files with the same nonempty fingerprint are
+/// candidate rename/move partners.
+fn file_fingerprint(pf: &ParsedFile, opts: &DiffOptions) -> Vec<String> {
+    let mut fp: Vec<String> = group(pf, opts)
+        .into_iter()
+        .flat_map(|((kind, name), bucket)| {
+            bucket
+                .sigs
+                .into_iter()
+                .map(move |sig| format!("{kind}\u{1}{name}\u{1}{sig}"))
+        })
+        .collect();
+    fp.sort();
+    fp
+}
+
+/// Detect renamed/moved files: a removed file and an added file whose symbol
+/// fingerprints are identical, nonempty, and unique on both sides (#106). Paired
+/// files are removed from `removed`/`added` and returned as moves. Conservative:
+/// a fingerprint shared by more than one file on either side is left as
+/// add/remove (ambiguous).
+fn detect_file_moves(
+    removed: &mut Vec<FileSummary>,
+    added: &mut Vec<FileSummary>,
+    old_idx: &BTreeMap<String, (&'static str, &ParsedFile)>,
+    new_idx: &BTreeMap<String, (&'static str, &ParsedFile)>,
+    opts: &DiffOptions,
+) -> Vec<MovedFile> {
+    // Fingerprint each candidate; count how often each appears per side.
+    let fp_for = |idx: &BTreeMap<String, (&'static str, &ParsedFile)>, rel: &str| {
+        idx.get(rel).map(|(_, pf)| file_fingerprint(pf, opts))
+    };
+    let mut removed_counts: BTreeMap<Vec<String>, usize> = BTreeMap::new();
+    for f in removed.iter() {
+        if let Some(fp) = fp_for(old_idx, &f.rel) {
+            if !fp.is_empty() {
+                *removed_counts.entry(fp).or_default() += 1;
+            }
+        }
+    }
+    let mut added_counts: BTreeMap<Vec<String>, usize> = BTreeMap::new();
+    for f in added.iter() {
+        if let Some(fp) = fp_for(new_idx, &f.rel) {
+            if !fp.is_empty() {
+                *added_counts.entry(fp).or_default() += 1;
+            }
+        }
+    }
+
+    let mut moves: Vec<MovedFile> = Vec::new();
+    let mut moved_removed: BTreeSet<String> = BTreeSet::new();
+    let mut moved_added: BTreeSet<String> = BTreeSet::new();
+    for r in removed.iter() {
+        let Some(fp) = fp_for(old_idx, &r.rel) else {
+            continue;
+        };
+        if fp.is_empty() || removed_counts.get(&fp) != Some(&1) || added_counts.get(&fp) != Some(&1)
+        {
+            continue;
+        }
+        // Unique on both sides — find the single added partner with this fp.
+        if let Some(a) = added
+            .iter()
+            .find(|a| fp_for(new_idx, &a.rel).as_ref() == Some(&fp))
+        {
+            moved_removed.insert(r.rel.clone());
+            moved_added.insert(a.rel.clone());
+            moves.push(MovedFile {
+                old_rel: r.rel.clone(),
+                new_rel: a.rel.clone(),
+                lang: r.lang,
+                symbol_count: r.symbol_count,
+            });
+        }
+    }
+    removed.retain(|f| !moved_removed.contains(&f.rel));
+    added.retain(|f| !moved_added.contains(&f.rel));
+    moves.sort_by(|a, b| a.new_rel.cmp(&b.new_rel));
+    moves
 }
 
 /// Index a tree's parse output by relative path (sorted, deterministic).
@@ -648,5 +754,43 @@ mod tests {
         ];
         let opts = DiffOptions { no_private: false };
         assert_eq!(diff(&old, &new, &opts), diff(&old, &new, &opts));
+    }
+
+    #[test]
+    fn identical_file_at_new_path_is_a_move() {
+        let syms = || vec![pubf("f", "def f()"), pubf("g", "def g()")];
+        let old = vec![file("a.py", syms(), vec![])];
+        let new = vec![file("b.py", syms(), vec![])];
+        let d = diff(&old, &new, &DiffOptions { no_private: false });
+        assert!(d.added_files.is_empty(), "{d:?}");
+        assert!(d.removed_files.is_empty(), "{d:?}");
+        assert_eq!(d.moved_files.len(), 1);
+        assert_eq!(d.moved_files[0].old_rel, "a.py");
+        assert_eq!(d.moved_files[0].new_rel, "b.py");
+        assert_eq!(d.moved_files[0].symbol_count, 2);
+    }
+
+    #[test]
+    fn ambiguous_identical_files_are_not_moved() {
+        // Two old files share one symbol set → ambiguous → kept as add/remove.
+        let old = vec![
+            file("a.py", vec![pubf("f", "def f()")], vec![]),
+            file("a2.py", vec![pubf("f", "def f()")], vec![]),
+        ];
+        let new = vec![file("b.py", vec![pubf("f", "def f()")], vec![])];
+        let d = diff(&old, &new, &DiffOptions { no_private: false });
+        assert!(d.moved_files.is_empty(), "{d:?}");
+        assert_eq!(d.removed_files.len(), 2);
+        assert_eq!(d.added_files.len(), 1);
+    }
+
+    #[test]
+    fn unrelated_add_remove_is_not_a_move() {
+        let old = vec![file("a.py", vec![pubf("f", "def f()")], vec![])];
+        let new = vec![file("b.py", vec![pubf("g", "def g()")], vec![])];
+        let d = diff(&old, &new, &DiffOptions { no_private: false });
+        assert!(d.moved_files.is_empty(), "{d:?}");
+        assert_eq!(d.removed_files.len(), 1);
+        assert_eq!(d.added_files.len(), 1);
     }
 }

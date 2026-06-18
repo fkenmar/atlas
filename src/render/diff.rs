@@ -5,7 +5,8 @@
 use std::fmt::Write as _;
 
 use crate::diff::{
-    FileDelta, FileSummary, KindChange, Severity, StructuralDiff, SymbolChange, SymbolLine,
+    FileDelta, FileSummary, KindChange, MovedFile, Severity, StructuralDiff, SymbolChange,
+    SymbolLine,
 };
 use crate::parse::ParseStats;
 use crate::render::json::json_str;
@@ -50,6 +51,18 @@ pub fn render(
          (heuristic, not a type-checker)",
         counts[0], counts[1], counts[2], counts[3]
     );
+
+    if !diff.moved_files.is_empty() {
+        out.push('\n');
+        let _ = writeln!(out, "## Moved files");
+        for m in &diff.moved_files {
+            let _ = writeln!(
+                out,
+                "→ {} → {} ({}, {} symbol(s))",
+                m.old_rel, m.new_rel, m.lang, m.symbol_count
+            );
+        }
+    }
 
     if !diff.added_files.is_empty() {
         out.push('\n');
@@ -130,6 +143,8 @@ fn sev_index(s: Severity) -> usize {
 /// internal]` (#107).
 fn tally_severities(diff: &StructuralDiff) -> [usize; 4] {
     let mut counts = [0usize; 4];
+    // A pure rename/move keeps the same symbols — informational (path changed).
+    counts[2] += diff.moved_files.len();
     for f in &diff.added_files {
         counts[sev_index(f.severity(false))] += 1;
     }
@@ -182,12 +197,22 @@ pub fn render_json(
     let removed = json_arr(&diff.removed_files, |f: &FileSummary| {
         file_summary_json(f, f.severity(true))
     });
+    let moved = json_arr(&diff.moved_files, |m: &MovedFile| {
+        format!(
+            "{{\"old\": {}, \"new\": {}, \"lang\": {}, \"symbols\": {}}}",
+            json_str(&m.old_rel),
+            json_str(&m.new_rel),
+            json_str(m.lang),
+            m.symbol_count
+        )
+    });
     let changed = json_arr(&diff.changed_files, file_delta_json);
     let mut out = String::new();
     out.push_str("{\n");
     let _ = writeln!(out, "  \"version\": {DIFF_SCHEMA_VERSION},");
     let _ = writeln!(out, "  \"old\": {},", json_str(old_label));
     let _ = writeln!(out, "  \"new\": {},", json_str(new_label));
+    let _ = writeln!(out, "  \"moved_files\": {moved},");
     let _ = writeln!(out, "  \"added_files\": {added},");
     let _ = writeln!(out, "  \"removed_files\": {removed},");
     let _ = writeln!(out, "  \"changed_files\": {changed},");
@@ -292,6 +317,22 @@ pub fn render_xml(
         xml_escape(new_label, true)
     );
 
+    if diff.moved_files.is_empty() {
+        out.push_str("  <moved-files/>\n");
+    } else {
+        out.push_str("  <moved-files>\n");
+        for m in &diff.moved_files {
+            let _ = writeln!(
+                out,
+                "    <file old=\"{}\" new=\"{}\" lang=\"{}\" symbols=\"{}\"/>",
+                xml_escape(&m.old_rel, true),
+                xml_escape(&m.new_rel, true),
+                xml_escape(m.lang, true),
+                m.symbol_count
+            );
+        }
+        out.push_str("  </moved-files>\n");
+    }
     xml_file_list(&mut out, "added-files", &diff.added_files, false);
     xml_file_list(&mut out, "removed-files", &diff.removed_files, true);
 
@@ -451,6 +492,12 @@ mod tests {
                 added_imports: vec!["c".to_string()],
                 removed_imports: vec!["a".to_string()],
             }],
+            moved_files: vec![MovedFile {
+                old_rel: "old/m.py".to_string(),
+                new_rel: "new/m.py".to_string(),
+                lang: "python",
+                symbol_count: 3,
+            }],
         }
     }
 
@@ -459,6 +506,7 @@ mod tests {
             added_files: vec![],
             removed_files: vec![],
             changed_files: vec![],
+            moved_files: vec![],
         }
     }
 
@@ -605,6 +653,27 @@ mod tests {
         assert_eq!(
             render_xml(&sample(), "a", "b", &s, &s),
             render_xml(&sample(), "a", "b", &s, &s)
+        );
+    }
+
+    #[test]
+    fn moved_files_render_in_all_formats() {
+        let s = ParseStats::default();
+        let md = render(&sample(), "a", "b", &s, &s);
+        assert!(md.contains("## Moved files"), "{md}");
+        assert!(
+            md.contains("→ old/m.py → new/m.py (python, 3 symbol(s))"),
+            "{md}"
+        );
+        let json = render_json(&sample(), "a", "b", &s, &s);
+        assert!(
+            json.contains("\"old\": \"old/m.py\", \"new\": \"new/m.py\", \"lang\": \"python\", \"symbols\": 3"),
+            "{json}"
+        );
+        let xml = render_xml(&sample(), "a", "b", &s, &s);
+        assert!(
+            xml.contains("<file old=\"old/m.py\" new=\"new/m.py\" lang=\"python\" symbols=\"3\"/>"),
+            "{xml}"
         );
     }
 }

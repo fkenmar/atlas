@@ -66,6 +66,12 @@ benchmark delta.
     (import-edge changes), internal (private-only) — shown as a Markdown summary
     line and a per-change `severity` field in JSON/XML (additive, no version
     bump). Conservative and explicitly not a type-checker guarantee (#107).
+  - **Rename/move detection** (#106): a removed file and an added file with an
+    identical, uniquely-matched symbol set are reported once as a `→ old → new`
+    *move* instead of a noisy remove + add (Markdown `## Moved files`, JSON
+    `moved_files`, XML `<moved-files>`). Conservative — any ambiguity (a symbol
+    set shared by more than one file on either side) stays as add/remove.
+    Symbol-level moves (a declaration relocated between files) are a follow-up.
 - **XML renderer (`--format xml`).** A third output format alongside Markdown
   and JSON, for prompt-injection-safe wrapping in Claude prompts: a well-formed
   XML document where signatures/paths are escaped per the XML 1.0 spec so
