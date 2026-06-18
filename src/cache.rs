@@ -12,7 +12,11 @@ use crate::parse::ParsedFile;
 /// Bumped whenever extraction output or the grammar set changes, so a stale
 /// cache from an older atlas is discarded wholesale rather than returning
 /// out-of-date symbols. (Tie to grammar crate versions once they're surfaced.)
-const CACHE_VERSION: u32 = 2;
+///
+/// History: 2 → 3 when the Tier 2 grammars (Go/Java/C/C++, #10) expanded the
+/// extracted symbol set — caches written by a pre-Tier-2 build would otherwise
+/// return out-of-date symbols for those languages.
+const CACHE_VERSION: u32 = 3;
 
 #[derive(bincode::Encode, bincode::Decode)]
 struct CacheEntry {
@@ -233,6 +237,41 @@ mod tests {
             // A changed hash misses.
             assert!(c.get("a.py", 99).is_none());
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn stale_version_cache_is_discarded() {
+        // A cache blob written under a different version must be discarded
+        // wholesale, so a grammar/extraction change (e.g. the Tier 2 bump to
+        // CACHE_VERSION 3, #10/#34) never returns out-of-date symbols.
+        let dir = std::env::temp_dir().join(format!("atlas-cache-stale-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("cache");
+
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            "a.py".to_string(),
+            CacheEntry {
+                content_hash: 1,
+                parsed: parsed("stale"),
+            },
+        );
+        let blob = CacheFile {
+            version: CACHE_VERSION - 1,
+            entries,
+        };
+        let bytes = bincode::encode_to_vec(&blob, bincode::config::standard()).unwrap();
+        std::fs::write(&path, bytes).unwrap();
+
+        assert!(
+            load(&path).is_none(),
+            "a cache from an older version must be discarded, not loaded"
+        );
+        // And a fresh Cache over that dir treats it as a cold miss.
+        let mut c = Cache::open(&dir);
+        assert!(c.get("a.py", 1).is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

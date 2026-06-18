@@ -103,6 +103,16 @@ benchmark delta.
   kind/visibility/detail vocabulary), and output stays deterministic (NFR-4).
   Closes the last output-format item on the board (#11).
 
+### Fixed
+- **Parse cache invalidated for Tier 2 grammars (#34).** Bumped `CACHE_VERSION`
+  2 → 3 so a cache written by a pre-Tier-2 build is discarded wholesale instead
+  of returning out-of-date symbols for Go/Java/C/C++. Added a regression guard
+  test that an older-version cache blob is never loaded. The version-check/discard
+  machinery was already in place; only the bump and guard were missing.
+- **Unknown-`--lang` message lists Tier 2 extensions (#35).** Added an
+  integration test pinning the unknown-language error text so it keeps
+  advertising the Go/Java/C/C++ extensions (the messages were already updated).
+
 ## [0.2.1-alpha] - 2026-06-17
 
 Terminal polish, and the fix that makes the pip publish actually land.

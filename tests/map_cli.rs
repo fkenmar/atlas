@@ -119,3 +119,23 @@ fn empty_map_diagnostic_reports_seen_extensions() {
     assert!(stderr.contains(".md (1)"), "{stderr}");
     let _ = fs::remove_dir_all(repo);
 }
+
+#[test]
+fn unknown_lang_error_text_lists_tier2_extensions() {
+    // The unknown-`--lang` message must advertise the Tier 2 extensions so a
+    // user who tries an unsupported language sees Go/Java/C/C++ are covered (#35).
+    let repo = write_python_repo("unknown-lang");
+    let output = run_atlas(&[repo.to_str().unwrap(), "--lang", "cobol"]);
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr).expect("utf-8 stderr");
+    assert!(stderr.contains("unknown --lang value"), "{stderr}");
+    for ext in ["go", "java", "c", "cpp", "hpp"] {
+        assert!(
+            stderr.contains(ext),
+            "error text should list Tier 2 extension {ext:?}: {stderr}"
+        );
+    }
+    assert!(stderr.contains("Go, Java"), "{stderr}");
+    let _ = fs::remove_dir_all(repo);
+}
