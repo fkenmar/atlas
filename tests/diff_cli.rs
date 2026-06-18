@@ -144,3 +144,29 @@ fn diff_file_instead_of_dir_exits_2() {
         .expect("failed to run atlas");
     assert_eq!(out.status.code(), Some(2));
 }
+
+#[test]
+fn diff_exit_code_gate_fails_on_breaking() {
+    // old→new removes public `g` and changes public `f` — both breaking (#85).
+    let out = Command::new(env!("CARGO_BIN_EXE_atlas"))
+        .arg("diff")
+        .arg(fixture("old"))
+        .arg(fixture("new"))
+        .arg("--exit-code")
+        .output()
+        .expect("failed to run atlas");
+    assert_eq!(out.status.code(), Some(1), "breaking diff should exit 1");
+}
+
+#[test]
+fn diff_exit_code_gate_passes_without_breaking() {
+    // Identical trees → no breaking change → exit 0 even with --exit-code.
+    let out = Command::new(env!("CARGO_BIN_EXE_atlas"))
+        .arg("diff")
+        .arg(fixture("old"))
+        .arg(fixture("old"))
+        .arg("--exit-code")
+        .output()
+        .expect("failed to run atlas");
+    assert!(out.status.success(), "no-breaking diff should exit 0");
+}

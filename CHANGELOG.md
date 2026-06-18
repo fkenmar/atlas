@@ -90,6 +90,11 @@ benchmark delta.
     `moved_files`, XML `<moved-files>`). Conservative — any ambiguity (a symbol
     set shared by more than one file on either side) stays as add/remove.
     Symbol-level moves (a declaration relocated between files) are a follow-up.
+  - **CI gate** (#85): `atlas diff … --exit-code` exits non-zero on a breaking
+    change (a removed or signature-changed public symbol/file); default stays
+    informational (exit 0). Pair with `--no-private` to gate the public surface.
+    See `docs/ci-diff-gate.md` for a sample GitHub Actions workflow (with an
+    `api-break-ok` override label) and when gating is appropriate vs too noisy.
 - **XML renderer (`--format xml`).** A third output format alongside Markdown
   and JSON, for prompt-injection-safe wrapping in Claude prompts: a well-formed
   XML document where signatures/paths are escaped per the XML 1.0 spec so

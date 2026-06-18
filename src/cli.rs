@@ -158,6 +158,12 @@ pub struct DiffArgs {
     /// Public API surface only — drop private symbols before comparing.
     #[arg(long)]
     pub no_private: bool,
+    /// Exit non-zero (1) if the diff has breaking changes (a removed or
+    /// signature-changed public symbol/file) — for CI gating (#85). Default:
+    /// always exit 0 (informational). Pair with `--no-private` to gate on the
+    /// public API surface only.
+    #[arg(long)]
+    pub exit_code: bool,
 }
 
 /// `atlas serve --mcp` — run atlas as a server (ADR 0008). Routed by [`run`]
@@ -292,7 +298,9 @@ fn run_diff(args: DiffArgs) -> Result<(), i32> {
         }
     };
 
-    let render = || -> String {
+    // Returns the rendered diff and whether it has breaking changes (for the
+    // optional CI gate, #85).
+    let render = || -> (String, bool) {
         let mut old_files = crate::discover::discover(&old_tree.root);
         let mut new_files = crate::discover::discover(&new_tree.root);
         if !langs.is_empty() {
@@ -305,19 +313,26 @@ fn run_diff(args: DiffArgs) -> Result<(), i32> {
             no_private: args.no_private,
         };
         let delta = crate::diff::diff(&old_outcome.files, &new_outcome.files, &opts);
+        let breaking = delta.has_breaking_changes();
         let (os, ns) = (&old_outcome.stats, &new_outcome.stats);
-        match args.format {
+        let out = match args.format {
             Format::Md => crate::render::diff::render(&delta, &old_label, &new_label, os, ns),
             Format::Json => {
                 crate::render::diff::render_json(&delta, &old_label, &new_label, os, ns)
             }
             Format::Xml => crate::render::diff::render_xml(&delta, &old_label, &new_label, os, ns),
-        }
+        };
+        (out, breaking)
     };
-    let out = render();
+    let (out, breaking) = render();
     old_tree.cleanup();
     new_tree.cleanup();
     print!("{out}");
+    // CI gate (#85): default is informational (exit 0); --exit-code fails on a
+    // breaking change.
+    if args.exit_code && breaking {
+        return Err(1);
+    }
     Ok(())
 }
 

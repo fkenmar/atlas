@@ -170,6 +170,20 @@ impl StructuralDiff {
             && self.removed_files.is_empty()
             && self.changed_files.is_empty()
     }
+
+    /// True if any change is breaking severity — a removed or signature-changed
+    /// public symbol/file (#107). Powers the optional CI gate (#85). Additions,
+    /// kind-changes, moves, and private-only changes are not breaking.
+    pub fn has_breaking_changes(&self) -> bool {
+        let breaking = |s: Severity| s == Severity::Breaking;
+        self.removed_files
+            .iter()
+            .any(|f| breaking(f.severity(true)))
+            || self.changed_files.iter().any(|fd| {
+                fd.removed.iter().any(|s| breaking(s.severity(true)))
+                    || fd.changed.iter().any(|c| breaking(c.severity()))
+            })
+    }
 }
 
 /// Compute the structural diff from `old` to `new` (the parse output of each
