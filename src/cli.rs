@@ -136,19 +136,21 @@ pub enum Format {
     Xml,
 }
 
-/// `atlas diff <old> <new>` — structural delta between two trees (ADR 0005).
+/// `atlas diff <old> [new]` — structural delta between two trees (ADR 0005).
 /// Routed by [`run`] before the map parser, git-style, so it stays out of the
-/// flat map `Cli`.
+/// flat map `Cli`. With one argument, `new` defaults to the current working
+/// tree, so `atlas diff HEAD` shows what changed since a revision (#24).
 #[derive(Parser, Debug)]
 #[command(
     name = "atlas diff",
     about = "Structural diff of the map between two trees"
 )]
 pub struct DiffArgs {
-    /// The old / base tree.
+    /// The old / base tree (a directory or a git revision).
     pub old: PathBuf,
-    /// The new / changed tree.
-    pub new: PathBuf,
+    /// The new / changed tree (a directory or a git revision). Omit to compare
+    /// `old` against the current working tree — e.g. `atlas diff HEAD`.
+    pub new: Option<PathBuf>,
     /// Output format: md (default), json, or xml.
     #[arg(short, long, value_enum, default_value_t = Format::Md)]
     pub format: Format,
@@ -286,11 +288,17 @@ pub fn run() {
 fn run_diff(args: DiffArgs) -> Result<(), i32> {
     let langs = parse_langs(args.lang.as_deref())?;
     let old_label = args.old.to_string_lossy().into_owned();
-    let new_label = args.new.to_string_lossy().into_owned();
+    // One-argument shorthand (#24): `atlas diff <rev>` compares against the
+    // current working tree (".").
+    let new_arg = args.new.clone().unwrap_or_else(|| PathBuf::from("."));
+    let new_label = match &args.new {
+        Some(p) => p.to_string_lossy().into_owned(),
+        None => "(working tree)".to_string(),
+    };
 
     let old_tree = resolve_tree(&args.old, 0)?;
     // Clean up the first worktree if resolving the second fails.
-    let new_tree = match resolve_tree(&args.new, 1) {
+    let new_tree = match resolve_tree(&new_arg, 1) {
         Ok(t) => t,
         Err(code) => {
             old_tree.cleanup();
@@ -1156,7 +1164,7 @@ mod tests {
         // argv[0] mirrors the synthetic name the `diff` router passes.
         let d = DiffArgs::parse_from(["atlas diff", "old", "new"]);
         assert_eq!(d.old, PathBuf::from("old"));
-        assert_eq!(d.new, PathBuf::from("new"));
+        assert_eq!(d.new, Some(PathBuf::from("new")));
         assert!(!d.no_private);
         assert_eq!(d.lang, None);
     }
@@ -1185,7 +1193,16 @@ mod tests {
     }
 
     #[test]
-    fn diff_requires_two_paths() {
-        assert!(DiffArgs::try_parse_from(["atlas diff", "only-one"]).is_err());
+    fn diff_one_arg_leaves_new_unset() {
+        // The one-argument shorthand (#24): `new` defaults to the working tree,
+        // surfaced as `None` so run_diff can substitute ".".
+        let d = DiffArgs::parse_from(["atlas diff", "HEAD"]);
+        assert_eq!(d.old, PathBuf::from("HEAD"));
+        assert_eq!(d.new, None);
+    }
+
+    #[test]
+    fn diff_requires_at_least_one_path() {
+        assert!(DiffArgs::try_parse_from(["atlas diff"]).is_err());
     }
 }
