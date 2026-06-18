@@ -10,8 +10,10 @@
 ;
 ; Validate against tests/queries/fixtures/cpp.cpp; node names come from
 ; `cargo run --example dump-ast <file>`, never from guessing. Member access
-; specifiers aren't on the signature line, so members read as public; a
-; `static` free function/global is file-private (src/parse.rs).
+; specifiers (`private:`/`protected:`) live on a sibling `access_specifier`
+; node, not the member's own line, so member visibility is resolved by an AST
+; pass in src/parse.rs (cpp_private_member_rows), not from the signature text;
+; a `static` free function/global stays file-private.
 ; Kind mapping: struct/class → class, namespace → module.
 
 ; Namespaces → module.

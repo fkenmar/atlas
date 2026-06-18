@@ -4,13 +4,14 @@ L7   Module    Public  service         :: namespace service {
 L9   Class     Public  Service         :: class Service {
 L11  Method    Public  Service         :: Service(int count);
 L12  Method    Public  total           :: int total() const;
-L15  Method    Public  helper          :: int helper(int x);
-L16  Field     Public  count_          :: int count_;
-L19  Class     Public  Point           :: struct Point {
-L20  Field     Public  x               :: int x;
-L21  Field     Public  y               :: int y;
-L24  Enum      Public  Level           :: enum class Level {
-L29  TypeAlias Public  Id              :: using Id = int;
-L31  Function  Public  add             :: int add(int a, int b) {
+L15  Method    Private adjust          :: int adjust(int delta);
+L18  Method    Private helper          :: int helper(int x);
+L19  Field     Private count_          :: int count_;
+L22  Class     Public  Point           :: struct Point {
+L23  Field     Public  x               :: int x;
+L24  Field     Public  y               :: int y;
+L27  Enum      Public  Level           :: enum class Level {
+L32  TypeAlias Public  Id              :: using Id = int;
+L34  Function  Public  add             :: int add(int a, int b) {
 imports: #include "config.h", #include <string>
 references: add

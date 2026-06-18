@@ -1,4 +1,4 @@
-# atlas: fixtures (315 LOC, 7 files) | budget 4096 | rendered 629 tok
+# atlas: fixtures (318 LOC, 7 files) | budget 4096 | rendered 635 tok
 
 ## c.c (#1)
 struct Point
@@ -15,6 +15,7 @@ namespace service
 class Service
     Service(int count)
     int total() const
+    int adjust(int delta)
     int helper(int x)
     int count_
 struct Point

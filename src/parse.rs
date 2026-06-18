@@ -227,6 +227,12 @@ fn parse_source(file: &SourceFile, source: &str) -> Option<ParsedFile> {
     // their declarations can be dropped. Empty for non-Rust.
     let test_ranges = test_module_ranges(file.lang, &tree, source.as_bytes());
 
+    // Rows of C++ class/struct members in a `private:`/`protected:` section.
+    // The access specifier is a sibling node, never on the member's own line,
+    // so visibility for those members is decided here, not from the signature.
+    // Empty for every non-C++ language.
+    let cpp_private_rows = cpp_private_member_rows(file.lang, &tree, source.as_bytes());
+
     // Keyed by (line of name, name) so duplicate pattern matches collapse;
     // BTreeMap keeps the deterministic (line, name) order for free.
     let mut symbols: BTreeMap<(usize, String), Symbol> = BTreeMap::new();
@@ -291,7 +297,12 @@ fn parse_source(file: &SourceFile, source: &str) -> Option<ParsedFile> {
                     .get(name_row)
                     .map(|l| l.trim().to_string())
                     .unwrap_or_default();
-                let visibility = visibility_of(file.lang, &signature, name);
+                let mut visibility = visibility_of(file.lang, &signature, name);
+                // C++ members in a private/protected access section are internal
+                // API regardless of their signature text (see cpp_private_rows).
+                if cpp_private_rows.contains(&name_row) {
+                    visibility = Visibility::Private;
+                }
                 let symbol = Symbol {
                     name: name.to_string(),
                     kind,
@@ -397,6 +408,69 @@ fn is_test_module(module: tree_sitter::Node, source: &[u8]) -> bool {
     false
 }
 
+/// Rows (0-based) of C++ class/struct members that fall in a `private:` or
+/// `protected:` access-specifier section. A member declared on one of these
+/// rows is internal API and must read as [`Visibility::Private`] regardless of
+/// its signature text — the access specifier is a sibling node, never on the
+/// member's own line, so [`visibility_of`] can't see it without this pass.
+///
+/// Access rules encoded here:
+/// - `class` defaults to private: members before the first `access_specifier`
+///   are private.
+/// - `struct` defaults to public: members before the first specifier are public.
+/// - After a specifier, the section runs until the next specifier; `private`
+///   and `protected` sections are collected, `public` sections are not.
+///
+/// Returns empty for any language other than C++ (C has no access specifiers).
+fn cpp_private_member_rows(
+    lang: Language,
+    tree: &tree_sitter::Tree,
+    source: &[u8],
+) -> BTreeSet<usize> {
+    let mut rows: BTreeSet<usize> = BTreeSet::new();
+    if lang != Language::Cpp {
+        return rows;
+    }
+    collect_cpp_private_rows(tree.root_node(), source, &mut rows);
+    rows
+}
+
+/// Recurse the named tree; for every class/struct body, walk its members in
+/// source order tracking the current access section and record the rows of
+/// members in a private/protected section.
+fn collect_cpp_private_rows(node: tree_sitter::Node, source: &[u8], rows: &mut BTreeSet<usize>) {
+    let kind = node.kind();
+    if kind == "class_specifier" || kind == "struct_specifier" {
+        if let Some(body) = node.child_by_field_name("body") {
+            // `class` defaults to private, `struct` defaults to public.
+            let mut private_section = kind == "class_specifier";
+            let mut cursor = body.walk();
+            for child in body.named_children(&mut cursor) {
+                if child.kind() == "access_specifier" {
+                    // Specifier text is the bare keyword (e.g. "private").
+                    let keyword = child.utf8_text(source).unwrap_or("");
+                    private_section = matches!(keyword, "private" | "protected");
+                    continue;
+                }
+                if private_section {
+                    // A member declaration can span lines; mark every row it
+                    // covers so the member's name row (wherever it lands) is hit.
+                    for row in child.start_position().row..=child.end_position().row {
+                        rows.insert(row);
+                    }
+                }
+            }
+        }
+    }
+    // Descend regardless: classes nest, and a class may sit inside a namespace,
+    // function, or another class body.
+    let mut cursor = node.walk();
+    let children: Vec<tree_sitter::Node> = node.named_children(&mut cursor).collect();
+    for child in children {
+        collect_cpp_private_rows(child, source, rows);
+    }
+}
+
 /// Decide a declaration's visibility from its source signature, per language.
 /// Visibility drives the budget ladder's first rung (drop private) and the
 /// `--no-private` flag, so it must reflect each language's real rule, not just
@@ -452,11 +526,11 @@ fn visibility_of(lang: Language, signature: &str, name: &str) -> Visibility {
         }
         Language::C | Language::Cpp => {
             // C/C++: a `static` free function or file-scope variable has
-            // internal linkage (file-private); everything else is part of the
-            // externally visible surface. C++ class-member access specifiers
-            // aren't reflected on the per-declaration signature line, so this
-            // intentionally treats members as public — acceptable since it only
-            // affects the budget ladder's drop-private rung.
+            // internal linkage (file-private); everything else is the externally
+            // visible surface. C++ class-member access specifiers live on a
+            // sibling node, not the member's signature line, so they're handled
+            // by [`cpp_private_member_rows`] in `parse_source`, which overrides
+            // this default to Private for members in a private/protected section.
             let before_name = signature.split(name).next().unwrap_or("");
             if before_name.split_whitespace().any(|w| w == "static") {
                 Visibility::Private
@@ -632,4 +706,60 @@ mod tests {
 
     // Full extraction (including end-to-end test-module exclusion) is covered
     // by the snapshot test in tests/query_snapshots.rs against the fixtures.
+
+    /// Visibility of a named C++ symbol after full extraction. Returns `None`
+    /// if no symbol with that name was extracted.
+    fn cpp_visibility(source: &str, name: &str) -> Option<super::Visibility> {
+        let file = crate::discover::SourceFile {
+            path: std::path::PathBuf::from("scratch.cpp"),
+            rel: "scratch.cpp".to_string(),
+            lang: Language::Cpp,
+        };
+        let parsed = super::parse_source(&file, source)?;
+        parsed
+            .symbols
+            .iter()
+            .find(|s| s.name == name)
+            .map(|s| s.visibility)
+    }
+
+    #[test]
+    fn cpp_class_defaults_members_to_private() {
+        use super::Visibility;
+        // `class` defaults to private: members before any specifier are private,
+        // members after `public:` are public.
+        let src = "class Widget {\n    int hidden_;\npublic:\n    int api();\n};\n";
+        assert_eq!(cpp_visibility(src, "hidden_"), Some(Visibility::Private));
+        assert_eq!(cpp_visibility(src, "api"), Some(Visibility::Public));
+    }
+
+    #[test]
+    fn cpp_struct_defaults_members_to_public() {
+        use super::Visibility;
+        // `struct` defaults to public; an explicit `private:` flips the section.
+        let src = "struct Bag {\n    int openField;\nprivate:\n    int closedField;\n};\n";
+        assert_eq!(cpp_visibility(src, "openField"), Some(Visibility::Public));
+        assert_eq!(
+            cpp_visibility(src, "closedField"),
+            Some(Visibility::Private)
+        );
+    }
+
+    #[test]
+    fn cpp_protected_section_is_private() {
+        use super::Visibility;
+        let src = "class C {\nprotected:\n    int guarded();\n};\n";
+        assert_eq!(cpp_visibility(src, "guarded"), Some(Visibility::Private));
+    }
+
+    #[test]
+    fn cpp_free_function_linkage_unchanged() {
+        use super::Visibility;
+        // A `static` free function keeps file-private internal linkage; a plain
+        // free function stays public. Access specifiers must not affect these.
+        let src =
+            "static int internalFn(int x) { return x; }\nint externalFn(int y) { return y; }\n";
+        assert_eq!(cpp_visibility(src, "internalFn"), Some(Visibility::Private));
+        assert_eq!(cpp_visibility(src, "externalFn"), Some(Visibility::Public));
+    }
 }

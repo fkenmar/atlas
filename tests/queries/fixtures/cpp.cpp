@@ -11,6 +11,9 @@ public:
     Service(int count);
     int total() const;
 
+protected:
+    int adjust(int delta);
+
 private:
     int helper(int x);
     int count_;
