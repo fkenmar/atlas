@@ -203,6 +203,24 @@ pub enum CacheCommand {
     },
 }
 
+/// `atlas explain <path>` — explain why a file ranks where it does (#94). Routed
+/// git-style, kept out of the flat map `Cli`.
+#[derive(Parser, Debug)]
+#[command(
+    name = "atlas explain",
+    about = "Explain a file's rank (importers, imports, score)"
+)]
+pub struct ExplainArgs {
+    /// File whose rank to explain.
+    pub path: PathBuf,
+    /// Repository root to rank within (default: current directory).
+    #[arg(long, value_name = "DIR")]
+    pub root: Option<PathBuf>,
+    /// Boost a file or directory in the ranking (to see its effect on `path`).
+    #[arg(long, value_name = "PATHS")]
+    pub focus: Vec<String>,
+}
+
 /// Entry point called from `main`. Exits the process with a status code.
 pub fn run() {
     // Git-style dispatch: `atlas diff <old> <new>` routes to the diff command
@@ -234,6 +252,16 @@ pub fn run() {
             std::iter::once("atlas cache".to_string()).chain(args.into_iter().skip(2)),
         );
         std::process::exit(match run_cache(cache) {
+            Ok(()) => 0,
+            Err(code) => code,
+        });
+    }
+    // `atlas explain <path>` explains a file's rank (#94).
+    if args.get(1).map(String::as_str) == Some("explain") {
+        let explain = ExplainArgs::parse_from(
+            std::iter::once("atlas explain".to_string()).chain(args.into_iter().skip(2)),
+        );
+        std::process::exit(match run_explain(explain) {
             Ok(()) => 0,
             Err(code) => code,
         });
@@ -354,6 +382,76 @@ fn run_cache(args: CacheArgs) -> Result<(), i32> {
             }
         }
     }
+}
+
+/// `atlas explain <path>` — report why a file ranks where it does (#94):
+/// rank position, PageRank score, importer/import counts, and focus boost.
+/// Read-only (uncached parse); leaves normal map output untouched.
+fn run_explain(args: ExplainArgs) -> Result<(), i32> {
+    let root = canonicalize_root(&args.root.clone().unwrap_or_else(|| PathBuf::from(".")))?;
+    let files = crate::discover::discover(&root);
+    if files.is_empty() {
+        eprintln!(
+            "atlas: no supported source files found under {}",
+            root.display()
+        );
+        return Err(1);
+    }
+    let outcome = crate::parse::parse_all(files);
+    let num_files = outcome.files.len();
+    let graph = crate::link::link(&outcome.files);
+    let focus = resolve_focus(&args.focus, &root, &outcome.files)?;
+    let ranking = crate::rank::rank(&graph, &focus);
+
+    let target = args.path.to_string_lossy();
+    let Some(rel) = canonical_rel(&target, &root) else {
+        eprintln!(
+            "atlas explain: {} is not inside {}",
+            args.path.display(),
+            root.display()
+        );
+        return Err(2);
+    };
+    let Some(idx) = outcome.files.iter().position(|(s, _)| s.rel == rel) else {
+        eprintln!(
+            "atlas explain: {rel} is not a mapped source file under {}",
+            root.display()
+        );
+        return Err(1);
+    };
+
+    // Rank position among files: by score desc, ties broken by rel (NFR-4).
+    let mut ranked: Vec<usize> = (0..num_files).collect();
+    ranked.sort_by(|&a, &b| {
+        ranking
+            .score(b)
+            .partial_cmp(&ranking.score(a))
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| outcome.files[a].0.rel.cmp(&outcome.files[b].0.rel))
+    });
+    let position = ranked.iter().position(|&i| i == idx).map_or(0, |p| p + 1);
+
+    // File node index == file index (link.rs §1). Importers = nodes pointing at
+    // it; imports = its edges to other File nodes.
+    let importers = (0..graph.nodes.len())
+        .filter(|&j| graph.edges[j].contains(&idx))
+        .count();
+    let imports = graph.edges[idx].iter().filter(|&&t| t < num_files).count();
+
+    println!("rank explanation for {rel}");
+    println!("  rank:      #{position} of {num_files} files");
+    println!("  score:     {:.6}", ranking.score(idx));
+    println!("  importers: {importers} (references into this file)");
+    println!("  imports:   {imports} (other files it imports)");
+    println!(
+        "  focus:     {}",
+        if focus.contains(&idx) {
+            "boosted (--focus)"
+        } else {
+            "not boosted"
+        }
+    );
+    Ok(())
 }
 
 /// Canonicalize `path` and confirm it's a directory, with actionable error

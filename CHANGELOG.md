@@ -16,6 +16,11 @@ benchmark delta.
   unaffected. Verified cold==warm output and run-to-run determinism.
 
 ### Added
+- **`atlas explain <path>` (#94).** A rank-explanation debug command: for a file
+  it reports its rank position, PageRank score, importer count (references in),
+  import count (files it imports), and whether `--focus` boosted it — so users
+  can see *why* a file ranks where it does when tuning `--focus`, `.atlasignore`,
+  or budgets. Read-only; normal map output is unchanged.
 - **Cache management commands (#80).** `atlas cache info` reports the cache
   path, presence, size, entry count, cache version, and self-ignore status;
   `atlas cache clean --force` removes the cache file (the `--force` guard prevents
