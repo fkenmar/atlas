@@ -171,15 +171,27 @@ Runtime performance is roughly language-neutral here — tree-sitter (a C librar
 ### 7.3 JSON schema (sketch)
 
 ```json
-{ "version": 1, "repo": {"root": "...", "loc": 50312, "files": 214},
-  "budget": {"target": 2048, "rendered": 1991},
+{ "version": 1, "repo": {"name": "atlas", "loc": 50312, "files": 214},
+  "budget": {"target": 2048, "rendered": 1991, "detail": "full"},
   "files": [{
-    "path": "src/auth/service.py", "lang": "python", "rank": 0.041,
-    "symbols": [{"kind": "method", "name": "AuthService.refresh_token",
-                 "sig": "(token: str) -> Token", "line": 88,
-                 "visibility": "public", "refs_in": 31}],
-    "imports": ["src/db/models.py", "src/config.py"] }] }
+    "path": "src/auth/service.py", "lang": "python",
+    "rank": 1, "score": 0.041000, "imported_by": 31,
+    "one_line": false, "omitted": 0,
+    "symbols": [{"kind": "method", "name": "refresh_token",
+                 "sig": "def refresh_token(token: str) -> Token", "line": 88,
+                 "visibility": "public"}],
+    "imports": ["src/db/models.py", "src/config.py"],
+    "used_by": ["src/api/routes.py"] }],
+  "collapsed": [{"dir": "tests", "count": 18}],
+  "symbol_index": [{"name": "Widget", "kind": "class", "path": "src/widget.py"}],
+  "skipped_files": 0, "unwired_files": 0 }
 ```
+
+Reverse-dependency counts moved to the file level (`imported_by`, with the
+resolved edges in `used_by`); `rank` is the integer position and `score` the
+float PageRank weight. `symbol_index` (ADR 0004) is additive — present only when
+files overflow the budget. Additive keys don't bump `version`; see the
+release-process skill and `render/json.rs` (the source of truth).
 
 ## 8. Success Metrics
 
