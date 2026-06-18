@@ -107,6 +107,9 @@ pub struct DiffArgs {
     pub old: PathBuf,
     /// The new / changed tree.
     pub new: PathBuf,
+    /// Output format: md (default), json, or xml.
+    #[arg(short, long, value_enum, default_value_t = Format::Md)]
+    pub format: Format,
     /// Restrict to languages by extension, e.g. --lang py,rs.
     #[arg(short, long, value_name = "CSV")]
     pub lang: Option<String>,
@@ -150,13 +153,14 @@ fn run_diff(args: DiffArgs) -> Result<(), i32> {
         no_private: args.no_private,
     };
     let delta = crate::diff::diff(&old_outcome.files, &new_outcome.files, &opts);
-    let out = crate::render::diff::render(
-        &delta,
-        &args.old.display().to_string(),
-        &args.new.display().to_string(),
-        &old_outcome.stats,
-        &new_outcome.stats,
-    );
+    let old_label = args.old.display().to_string();
+    let new_label = args.new.display().to_string();
+    let (os, ns) = (&old_outcome.stats, &new_outcome.stats);
+    let out = match args.format {
+        Format::Md => crate::render::diff::render(&delta, &old_label, &new_label, os, ns),
+        Format::Json => crate::render::diff::render_json(&delta, &old_label, &new_label, os, ns),
+        Format::Xml => crate::render::diff::render_xml(&delta, &old_label, &new_label, os, ns),
+    };
     print!("{out}");
     Ok(())
 }
@@ -498,6 +502,22 @@ mod tests {
         let d = DiffArgs::parse_from(["atlas diff", "a", "b", "--lang", "py", "--no-private"]);
         assert_eq!(d.lang.as_deref(), Some("py"));
         assert!(d.no_private);
+    }
+
+    #[test]
+    fn diff_args_format_defaults_md_and_parses() {
+        assert_eq!(
+            DiffArgs::parse_from(["atlas diff", "a", "b"]).format,
+            Format::Md
+        );
+        assert_eq!(
+            DiffArgs::parse_from(["atlas diff", "a", "b", "--format", "json"]).format,
+            Format::Json
+        );
+        assert_eq!(
+            DiffArgs::parse_from(["atlas diff", "a", "b", "-f", "xml"]).format,
+            Format::Xml
+        );
     }
 
     #[test]

@@ -172,7 +172,7 @@ fn render_symbol(out: &mut String, s: &RenderedSymbol) {
 /// §3.3.3) — in text content they stay literal. Any code point outside the XML
 /// 1.0 `Char` production (C0 controls, U+FFFE/U+FFFF, the BMP gap above
 /// U+FFFD) is dropped, so the output is always well-formed.
-fn xml_escape(s: &str, attr: bool) -> String {
+pub(crate) fn xml_escape(s: &str, attr: bool) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {

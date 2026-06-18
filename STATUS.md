@@ -138,6 +138,12 @@ Gate green: 95 lib tests + a `tests/diff_cli.rs` binary integration suite (4),
 clippy clean. M3 board NOT-YET cell now reads just "Tier 2 grammars" — both XML
 (#11) and diff (#12) have shipped.
 
+**Follow-up (#16):** `atlas diff --format json|xml` landed too — deterministic
+structured delta reusing the map renderers' escapers (`json_str`/`xml_escape`
+made `pub(crate)`), validated end-to-end with real JSON/XML parsers. Gate: 99 lib
+tests + 5 integration. Backlog filed for the rest: kind-change pairing (#17),
+git-revision shorthand (#18, needs git2), PRD §7.3 schema refresh (#19, done).
+
 ## XML renderer — first M3 deliverable (2026-06-18, closes #11)
 
 `atlas --format xml` now joins md/json — a third output format for

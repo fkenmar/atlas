@@ -47,6 +47,24 @@ fn diff_reports_structural_delta() {
 }
 
 #[test]
+fn diff_json_format_emits_structured_delta() {
+    let out = Command::new(env!("CARGO_BIN_EXE_atlas"))
+        .arg("diff")
+        .arg(fixture("old"))
+        .arg(fixture("new"))
+        .arg("--format")
+        .arg("json")
+        .output()
+        .expect("failed to run atlas");
+    assert!(out.status.success());
+    let stdout = String::from_utf8(out.stdout).expect("utf-8 output");
+    assert!(stdout.contains("\"added_files\""), "{stdout}");
+    assert!(stdout.contains("\"changed_files\""), "{stdout}");
+    assert!(stdout.contains("\"path\": \"added.py\""), "{stdout}");
+    assert!(stdout.contains("\"new_sig\": \"def f(x, y):\""), "{stdout}");
+}
+
+#[test]
 fn diff_is_deterministic_end_to_end() {
     let a = run_diff("old", "new");
     let b = run_diff("old", "new");

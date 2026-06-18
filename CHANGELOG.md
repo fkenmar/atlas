@@ -13,9 +13,11 @@ benchmark delta.
   files, and per common file the added/removed symbols, **changed signatures**, and
   added/removed import edges — so an agent sees what moved at the signature/edge level
   without re-reading the tree. Runs on the raw parse output (no ranking/budget, so
-  every change is reported), deterministic Markdown output. Compare git revisions by
-  materializing them first (`git worktree add`); a revision shorthand and JSON/XML diff
-  output are deferred follow-ups. No new dependency. See ADR 0005. Closes #12.
+  every change is reported), with deterministic Markdown, JSON, and XML output
+  (`--format`, #16) — the structured forms reuse the map renderers' escapers.
+  Compare git revisions by materializing them first (`git worktree add`); a
+  revision shorthand is a deferred follow-up (#18). No new dependency. See ADR 0005.
+  Closes #12.
 - **XML renderer (`--format xml`).** A third output format alongside Markdown
   and JSON, for prompt-injection-safe wrapping in Claude prompts: a well-formed
   XML document where signatures/paths are escaped per the XML 1.0 spec so
