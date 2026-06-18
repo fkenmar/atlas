@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<atlas version="1">
+  <repo name="fixtures" loc="315" files="7"/>
+  <budget target="4096" rendered="629" detail="full"/>
+  <files>
+    <file path="c.c" lang="c" rank="1" score="0.024798" imported_by="0" one_line="false" omitted="0">
+      <symbols>
+        <symbol kind="class" name="Point" line="7" visibility="public">struct Point</symbol>
+        <symbol kind="field" name="x" line="8" visibility="public">int x</symbol>
+        <symbol kind="field" name="y" line="9" visibility="public">int y</symbol>
+        <symbol kind="enum" name="Color" line="12" visibility="public">enum Color</symbol>
+        <symbol kind="type" name="PointAlias" line="18" visibility="public">typedef struct Point PointAlias</symbol>
+        <symbol kind="function" name="reset" line="21" visibility="public">void reset(void)</symbol>
+        <symbol kind="function" name="add" line="23" visibility="public">int add(int a, int b)</symbol>
+        <symbol kind="function" name="helper" line="27" visibility="private">static int helper(int x)</symbol>
+      </symbols>
+      <imports/>
+      <used_by/>
+    </file>
+    <file path="cpp.cpp" lang="cpp" rank="2" score="0.024798" imported_by="0" one_line="false" omitted="0">
+      <symbols>
+        <symbol kind="module" name="service" line="7" visibility="public">namespace service</symbol>
+        <symbol kind="class" name="Service" line="9" visibility="public">class Service</symbol>
+        <symbol kind="method" name="Service" line="11" visibility="public">Service(int count)</symbol>
+        <symbol kind="method" name="total" line="12" visibility="public">int total() const</symbol>
+        <symbol kind="method" name="helper" line="15" visibility="public">int helper(int x)</symbol>
+        <symbol kind="field" name="count_" line="16" visibility="public">int count_</symbol>
+        <symbol kind="class" name="Point" line="19" visibility="public">struct Point</symbol>
+        <symbol kind="field" name="x" line="20" visibility="public">int x</symbol>
+        <symbol kind="field" name="y" line="21" visibility="public">int y</symbol>
+        <symbol kind="enum" name="Level" line="24" visibility="public">enum class Level</symbol>
+        <symbol kind="type" name="Id" line="29" visibility="public">using Id = int</symbol>
+        <symbol kind="function" name="add" line="31" visibility="public">int add(int a, int b)</symbol>
+      </symbols>
+      <imports/>
+      <used_by/>
+    </file>
+    <file path="go.go" lang="go" rank="3" score="0.015334" imported_by="0" one_line="false" omitted="0">
+      <symbols>
+        <symbol kind="constant" name="APIVersion" line="11" visibility="public">const APIVersion = "1.0"</symbol>
+        <symbol kind="constant" name="internalFlag" line="13" visibility="private">const internalFlag = false</symbol>
+        <symbol kind="function" name="TopLevel" line="16" visibility="public">func TopLevel(x int) int</symbol>
+        <symbol kind="function" name="helper" line="20" visibility="private">func helper(x int) int</symbol>
+        <symbol kind="class" name="Service" line="25" visibility="public">type Service struct</symbol>
+        <symbol kind="field" name="Name" line="26" visibility="public">Name  string</symbol>
+        <symbol kind="field" name="count" line="27" visibility="private">count int</symbol>
+        <symbol kind="interface" name="Runner" line="31" visibility="public">type Runner interface</symbol>
+        <symbol kind="method" name="Run" line="36" visibility="public">func (s *Service) Run() error</symbol>
+        <symbol kind="method" name="reset" line="41" visibility="private">func (s *Service) reset()</symbol>
+      </symbols>
+      <imports/>
+      <used_by/>
+    </file>
+    <file path="java.java" lang="java" rank="4" score="0.015334" imported_by="0" one_line="false" omitted="0">
+      <symbols>
+        <symbol kind="class" name="Service" line="9" visibility="public">public class Service</symbol>
+        <symbol kind="field" name="API_VERSION" line="10" visibility="public">public static final String API_VERSION = "1.0"</symbol>
+        <symbol kind="field" name="count" line="11" visibility="private">private int count</symbol>
+        <symbol kind="method" name="Service" line="13" visibility="public">public Service(int count)</symbol>
+        <symbol kind="method" name="total" line="17" visibility="public">public int total()</symbol>
+        <symbol kind="method" name="helper" line="21" visibility="private">private int helper(int x)</symbol>
+        <symbol kind="interface" name="Runner" line="26" visibility="public">interface Runner</symbol>
+        <symbol kind="method" name="run" line="27" visibility="public">void run()</symbol>
+        <symbol kind="enum" name="Level" line="30" visibility="public">enum Level</symbol>
+      </symbols>
+      <imports/>
+      <used_by/>
+    </file>
+    <file path="python.py" lang="python" rank="5" score="0.015334" imported_by="0" one_line="false" omitted="0">
+      <symbols>
+        <symbol kind="constant" name="API_VERSION" line="6" visibility="public">API_VERSION = "1.0"</symbol>
+        <symbol kind="function" name="top_level" line="9" visibility="public">def top_level(x: int) -&gt; int</symbol>
+        <symbol kind="function" name="fetch" line="13" visibility="public">async def fetch(url: str) -&gt; Optional[str]</symbol>
+        <symbol kind="function" name="helper" line="17" visibility="public">def helper(x: int) -&gt; int</symbol>
+        <symbol kind="class" name="Service" line="21" visibility="public">class Service</symbol>
+        <symbol kind="method" name="name" line="25" visibility="public">def name(self) -&gt; str</symbol>
+        <symbol kind="method" name="run" line="28" visibility="public">def run(self) -&gt; None</symbol>
+        <symbol kind="method" name="helper_method" line="32" visibility="public">def helper_method() -&gt; None</symbol>
+        <symbol kind="class" name="Mark" line="36" visibility="public">class Mark</symbol>
+        <symbol kind="field" name="name" line="39" visibility="public">name: str</symbol>
+        <symbol kind="field" name="args" line="40" visibility="public">args: tuple</symbol>
+        <symbol kind="field" name="description" line="41" visibility="public">description: str | None = None</symbol>
+        <symbol kind="field" name="_internal" line="42" visibility="private">_internal: int = 0</symbol>
+        <symbol kind="function" name="decorating" line="45" visibility="public">def decorating(fn)</symbol>
+        <symbol kind="function" name="decorated" line="50" visibility="public">def decorated() -&gt; None</symbol>
+        <symbol kind="class" name="DecoratedService" line="55" visibility="public">class DecoratedService</symbol>
+      </symbols>
+      <imports/>
+      <used_by/>
+    </file>
+    <file path="rust.rs" lang="rust" rank="6" score="0.015334" imported_by="0" one_line="false" omitted="0">
+      <symbols>
+        <symbol kind="constant" name="API_VERSION" line="7" visibility="public">pub const API_VERSION: &amp;str = "1.0"</symbol>
+        <symbol kind="constant" name="GLOBAL_FLAG" line="8" visibility="public">pub static GLOBAL_FLAG: bool = false</symbol>
+        <symbol kind="function" name="top_level" line="10" visibility="public">pub fn top_level(x: u32) -&gt; u32</symbol>
+        <symbol kind="function" name="helper" line="14" visibility="private">fn helper(x: u32) -&gt; u32</symbol>
+        <symbol kind="class" name="Service" line="18" visibility="public">pub struct Service</symbol>
+        <symbol kind="field" name="names" line="19" visibility="private">names: BTreeMap&lt;String, u32&gt;,</symbol>
+        <symbol kind="enum" name="Level" line="22" visibility="public">pub enum Level</symbol>
+        <symbol kind="interface" name="Runner" line="27" visibility="public">pub trait Runner</symbol>
+        <symbol kind="method" name="run" line="28" visibility="private">fn run(&amp;self)</symbol>
+        <symbol kind="method" name="ready" line="30" visibility="private">fn ready(&amp;self) -&gt; bool</symbol>
+        <symbol kind="method" name="new" line="36" visibility="public">pub fn new() -&gt; Self</symbol>
+        <symbol kind="method" name="run" line="44" visibility="private">fn run(&amp;self)</symbol>
+        <symbol kind="module" name="nested" line="50" visibility="public">pub mod nested</symbol>
+        <symbol kind="type" name="Alias" line="51" visibility="public">pub type Alias = u64</symbol>
+        <symbol kind="function" name="shout" line="54" visibility="private">macro_rules! shout</symbol>
+      </symbols>
+      <imports/>
+      <used_by/>
+    </file>
+    <file path="typescript.ts" lang="typescript" rank="7" score="0.015334" imported_by="0" one_line="false" omitted="0">
+      <symbols>
+        <symbol kind="constant" name="API_VERSION" line="5" visibility="public">export const API_VERSION: string = "1.0"</symbol>
+        <symbol kind="function" name="topLevel" line="7" visibility="public">export function topLevel(x: number): number</symbol>
+        <symbol kind="function" name="arrow" line="11" visibility="public">const arrow = (x: number): number =&gt; x * 2</symbol>
+        <symbol kind="function" name="helper" line="13" visibility="public">function helper(x: number): number</symbol>
+        <symbol kind="interface" name="Options" line="17" visibility="public">export interface Options</symbol>
+        <symbol kind="field" name="budget" line="18" visibility="public">budget: number</symbol>
+        <symbol kind="type" name="Format" line="21" visibility="public">export type Format = "md" | "json" | "xml"</symbol>
+        <symbol kind="enum" name="Level" line="23" visibility="public">export enum Level</symbol>
+        <symbol kind="class" name="Service" line="28" visibility="public">export class Service</symbol>
+        <symbol kind="method" name="run" line="29" visibility="public">run(): void</symbol>
+        <symbol kind="method" name="helperMethod" line="33" visibility="private">private helperMethod(): void</symbol>
+        <symbol kind="function" name="overloaded" line="39" visibility="public">export function overloaded(x: number): number</symbol>
+        <symbol kind="function" name="overloaded" line="40" visibility="public">export function overloaded(x: string): string</symbol>
+        <symbol kind="function" name="overloaded" line="41" visibility="public">export function overloaded(x: number | string): number | string</symbol>
+        <symbol kind="function" name="ambient" line="46" visibility="public">declare function ambient(x: number): void</symbol>
+      </symbols>
+      <imports/>
+      <used_by/>
+    </file>
+  </files>
+  <collapsed/>
+  <symbol_index/>
+  <skipped_files>0</skipped_files>
+  <unwired_files>0</unwired_files>
+</atlas>
