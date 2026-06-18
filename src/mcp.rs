@@ -3,7 +3,10 @@
 //!
 //! [`handle`] is a pure request → response dispatch (`None` for notifications),
 //! so the protocol is unit-testable without any I/O; [`serve`] is a thin stdin
-//! loop over it. One tool, `get_map`, runs the map pipeline via [`build_map`].
+//! loop over it. Two tools: `get_map` runs the map pipeline, and `get_symbol`
+//! locates a declaration by name (`crate::api::find_symbol`). Both are strictly
+//! read-only — they parse uncached (never writing a `.atlas` cache into the
+//! target), are confined to `root` (#102), and make no network calls.
 
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -52,7 +55,10 @@ pub fn handle(req: &Value, root: &Path) -> Option<Value> {
 
     match method {
         "initialize" => Some(result(id, initialize_result())),
-        "tools/list" => Some(result(id, json!({ "tools": [get_map_tool()] }))),
+        "tools/list" => Some(result(
+            id,
+            json!({ "tools": [get_map_tool(), get_symbol_tool()] }),
+        )),
         "tools/call" => Some(result(id, handle_tools_call(req, root))),
         "ping" => Some(result(id, json!({}))),
         // Notifications (no `id`) get no response — e.g. notifications/initialized.
@@ -74,55 +80,129 @@ fn get_map_tool() -> Value {
         "name": "get_map",
         "description": "Compile a codebase into a token-budgeted structural map \
                         (signatures, types, import edges; no function bodies) for \
-                        navigating a repo without reading every file.",
+                        navigating a repo without reading every file. Read-only; \
+                        makes no network calls.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "path": { "type": "string", "description": "Repository root to map." },
                 "budget": { "type": "integer", "description": "Token budget (default 2048)." },
                 "no_private": { "type": "boolean", "description": "Public API surface only." },
-                "format": { "type": "string", "enum": ["md", "json", "xml"], "description": "Output format (default md)." }
+                "format": { "type": "string", "enum": ["md", "json", "xml"], "description": "Output format (default md)." },
+                "lang": { "type": "array", "items": { "type": "string" }, "description": "Restrict to languages by extension, e.g. [\"py\", \"rs\"]. A comma-separated string is also accepted." },
+                "focus": { "type": "array", "items": { "type": "string" }, "description": "Boost these paths (files or directory prefixes, relative to path) in the ranking." }
             },
             "required": ["path"]
         }
     })
 }
 
+fn get_symbol_tool() -> Value {
+    json!({
+        "name": "get_symbol",
+        "description": "Locate every definition of a symbol by exact name across the \
+                        repo — each hit's file, line, kind, signature, and visibility. \
+                        Answers \"where is X defined?\" for navigation, including \
+                        multi-site names. Read-only; makes no network calls.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "Repository root to search." },
+                "name": { "type": "string", "description": "Exact symbol name to locate." },
+                "no_private": { "type": "boolean", "description": "Public symbols only." },
+                "lang": { "type": "array", "items": { "type": "string" }, "description": "Restrict to languages by extension, e.g. [\"py\", \"rs\"]. A comma-separated string is also accepted." }
+            },
+            "required": ["path", "name"]
+        }
+    })
+}
+
 /// Execute a `tools/call`. Tool-level failures come back as an `isError` result
 /// (so the model sees them); only the shape is a successful JSON-RPC result.
-/// `root` confines `get_map` to its subtree (#102).
+/// `root` confines every tool to its subtree (#102).
 fn handle_tools_call(req: &Value, root: &Path) -> Value {
     let params = req.get("params");
     let name = params
         .and_then(|p| p.get("name"))
         .and_then(Value::as_str)
         .unwrap_or("");
-    if name != "get_map" {
-        return tool_error(format!(
-            "unknown tool: {name:?} (only \"get_map\" is available)"
-        ));
-    }
     let args = params.and_then(|p| p.get("arguments"));
-    let Some(path) = args.and_then(|a| a.get("path")).and_then(Value::as_str) else {
+    match name {
+        "get_map" => call_get_map(args, root),
+        "get_symbol" => call_get_symbol(args, root),
+        other => tool_error(format!(
+            "unknown tool: {other:?} (available: \"get_map\", \"get_symbol\")"
+        )),
+    }
+}
+
+fn call_get_map(args: Option<&Value>, root: &Path) -> Value {
+    let Some(path) = arg_str(args, "path") else {
         return tool_error("get_map requires a string \"path\" argument".to_string());
     };
-    let budget = args
-        .and_then(|a| a.get("budget"))
-        .and_then(Value::as_u64)
+    let budget = arg_u64(args, "budget")
         .map(|b| b as usize)
         .unwrap_or(DEFAULT_BUDGET);
-    let no_private = args
-        .and_then(|a| a.get("no_private"))
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let format = args
-        .and_then(|a| a.get("format"))
-        .and_then(Value::as_str)
-        .unwrap_or("md");
+    let no_private = arg_bool(args, "no_private");
+    let format = arg_str(args, "format").unwrap_or("md");
+    let langs = match parse_lang_arg(args) {
+        Ok(l) => l,
+        Err(e) => return tool_error(e),
+    };
+    let focus = parse_focus_arg(args);
 
-    match render_map(path, root, budget, no_private, format) {
+    match render_map(path, root, budget, no_private, format, langs, focus) {
         Ok(text) => json!({ "content": [{ "type": "text", "text": text }], "isError": false }),
         Err(e) => tool_error(e),
+    }
+}
+
+fn call_get_symbol(args: Option<&Value>, root: &Path) -> Value {
+    let Some(path) = arg_str(args, "path") else {
+        return tool_error("get_symbol requires a string \"path\" argument".to_string());
+    };
+    let Some(name) = arg_str(args, "name") else {
+        return tool_error("get_symbol requires a string \"name\" argument".to_string());
+    };
+    let no_private = arg_bool(args, "no_private");
+    let langs = match parse_lang_arg(args) {
+        Ok(l) => l,
+        Err(e) => return tool_error(e),
+    };
+    let target = match confine(path, root) {
+        Ok(t) => t,
+        Err(e) => return tool_error(e),
+    };
+    let opts = crate::api::MapOptions {
+        budget: DEFAULT_BUDGET,
+        no_private,
+        langs,
+        focus: Vec::new(),
+        cache: false,
+    };
+    match crate::api::find_symbol(&target, name, &opts) {
+        Ok(hits) => {
+            let definitions: Vec<Value> = hits
+                .iter()
+                .map(|h| {
+                    json!({
+                        "file": h.file,
+                        "line": h.line,
+                        "kind": h.kind,
+                        "visibility": h.visibility,
+                        "signature": h.signature,
+                    })
+                })
+                .collect();
+            let payload = json!({
+                "name": name,
+                "count": definitions.len(),
+                "definitions": definitions,
+            });
+            let text = serde_json::to_string_pretty(&payload).unwrap_or_default();
+            json!({ "content": [{ "type": "text", "text": text }], "isError": false })
+        }
+        Err(e) => tool_error(e.to_string()),
     }
 }
 
@@ -132,18 +212,77 @@ fn render_map(
     budget: usize,
     no_private: bool,
     format: &str,
+    langs: Vec<crate::lang::Language>,
+    focus: Vec<String>,
 ) -> Result<String, String> {
     if budget == 0 {
         return Err("budget must be at least 1 token".to_string());
     }
     let target = confine(requested, root)?;
-    let map = build_map(&target, budget, no_private)?;
+    let map = build_map(&target, budget, no_private, langs, focus)?;
     Ok(match format {
         "json" => crate::render::json::render(&map),
         "xml" => crate::render::xml::render(&map),
         "md" => crate::render::markdown::render(&map),
         other => return Err(format!("unknown format {other:?} (md, json, or xml)")),
     })
+}
+
+fn arg_str<'a>(args: Option<&'a Value>, key: &str) -> Option<&'a str> {
+    args.and_then(|a| a.get(key)).and_then(Value::as_str)
+}
+
+fn arg_bool(args: Option<&Value>, key: &str) -> bool {
+    args.and_then(|a| a.get(key))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn arg_u64(args: Option<&Value>, key: &str) -> Option<u64> {
+    args.and_then(|a| a.get(key)).and_then(Value::as_u64)
+}
+
+/// Parse the optional `lang` argument: an array of extension strings, or a
+/// single comma-separated string. Each token must be a known extension.
+fn parse_lang_arg(args: Option<&Value>) -> Result<Vec<crate::lang::Language>, String> {
+    let Some(value) = args.and_then(|a| a.get("lang")) else {
+        return Ok(Vec::new());
+    };
+    let tokens: Vec<String> = match value {
+        Value::String(s) => s
+            .split(',')
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .collect(),
+        Value::Array(arr) => arr
+            .iter()
+            .filter_map(Value::as_str)
+            .map(|s| s.to_string())
+            .collect(),
+        _ => return Err("\"lang\" must be a string or an array of strings".to_string()),
+    };
+    let mut langs = Vec::new();
+    for token in tokens {
+        match crate::lang::Language::from_extension(&token) {
+            Some(lang) => langs.push(lang),
+            None => return Err(format!("unknown lang value {token:?}")),
+        }
+    }
+    Ok(langs)
+}
+
+/// Parse the optional `focus` argument: an array of path strings, or a single
+/// string. Unknown shapes yield an empty focus (unfocused rank).
+fn parse_focus_arg(args: Option<&Value>) -> Vec<String> {
+    match args.and_then(|a| a.get("focus")) {
+        Some(Value::String(s)) => vec![s.clone()],
+        Some(Value::Array(arr)) => arr
+            .iter()
+            .filter_map(Value::as_str)
+            .map(|s| s.to_string())
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// Resolve `requested` (absolute, or relative to `root`) and confirm it is a
@@ -178,13 +317,20 @@ fn confine(requested: &str, root: &Path) -> Result<PathBuf, String> {
 /// Build the map via the supported library API (#69), read-only (#102): `cache:
 /// false` so an agent's map pull never writes a `.atlas` cache into the target
 /// repo.
-fn build_map(root: &Path, budget: usize, no_private: bool) -> Result<BudgetedMap, String> {
+fn build_map(
+    root: &Path,
+    budget: usize,
+    no_private: bool,
+    langs: Vec<crate::lang::Language>,
+    focus: Vec<String>,
+) -> Result<BudgetedMap, String> {
     crate::api::build_map(
         root,
         &crate::api::MapOptions {
             budget,
             no_private,
-            langs: Vec::new(),
+            langs,
+            focus,
             cache: false,
         },
     )
@@ -241,7 +387,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_has_get_map() {
+    fn tools_list_has_get_map_and_get_symbol() {
         let resp = handle(
             &json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
             any_root(),
@@ -252,6 +398,10 @@ mod tests {
             resp["result"]["tools"][0]["inputSchema"]["required"][0],
             "path"
         );
+        assert_eq!(resp["result"]["tools"][1]["name"], "get_symbol");
+        let required = &resp["result"]["tools"][1]["inputSchema"]["required"];
+        assert_eq!(required[0], "path");
+        assert_eq!(required[1], "name");
     }
 
     #[test]
@@ -335,6 +485,81 @@ mod tests {
         .unwrap();
         let text = resp["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("\"version\":"), "{text}");
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn get_symbol_locates_a_definition() {
+        let repo = temp_source_repo("sym");
+        let path = repo.to_string_lossy().to_string();
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":10,"method":"tools/call",
+                "params": { "name": "get_symbol", "arguments": { "path": path, "name": "run" } }
+            }),
+            &repo,
+        )
+        .unwrap();
+        assert_eq!(resp["result"]["isError"], false);
+        let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+        let payload: Value = serde_json::from_str(text).expect("get_symbol returns JSON");
+        assert_eq!(payload["name"], "run");
+        assert_eq!(payload["count"], 1);
+        assert_eq!(payload["definitions"][0]["file"], "app.py");
+        assert_eq!(payload["definitions"][0]["kind"], "function");
+        assert!(payload["definitions"][0]["line"].as_u64().unwrap() >= 1);
+        // Read-only (#102): get_symbol must not write a cache.
+        assert!(!repo.join(".atlas").exists(), "get_symbol wrote a cache");
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn get_symbol_unknown_name_is_empty_not_error() {
+        let repo = temp_source_repo("sym-missing");
+        let path = repo.to_string_lossy().to_string();
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":11,"method":"tools/call",
+                "params": { "name": "get_symbol", "arguments": { "path": path, "name": "nope" } }
+            }),
+            &repo,
+        )
+        .unwrap();
+        assert_eq!(resp["result"]["isError"], false);
+        let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+        let payload: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(payload["count"], 0);
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn get_symbol_missing_name_is_tool_error() {
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":12,"method":"tools/call",
+                "params": { "name": "get_symbol", "arguments": { "path": "." } }
+            }),
+            any_root(),
+        )
+        .unwrap();
+        assert_eq!(resp["result"]["isError"], true);
+    }
+
+    #[test]
+    fn get_map_unknown_lang_is_tool_error() {
+        let repo = temp_source_repo("badlang");
+        let path = repo.to_string_lossy().to_string();
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":13,"method":"tools/call",
+                "params": { "name": "get_map", "arguments": { "path": path, "lang": ["cobol"] } }
+            }),
+            &repo,
+        )
+        .unwrap();
+        assert_eq!(resp["result"]["isError"], true);
+        let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("unknown lang"), "{text}");
         let _ = fs::remove_dir_all(repo);
     }
 
