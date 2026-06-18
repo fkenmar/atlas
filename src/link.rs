@@ -641,4 +641,190 @@ mod tests {
         assert!(g.edges[2].contains(&run_a));
         assert!(g.edges[2].contains(&run_b));
     }
+
+    // ---- Tier 2 import linking (#21): Go, Java, C, C++ -------------------
+    // Each language gets three checks: a local import that must resolve, an
+    // external import that must NOT create an in-repo edge, and an
+    // ambiguous-basename case that must not produce a false edge.
+
+    #[test]
+    fn go_local_import_resolves_by_path_suffix() {
+        // main.go imports the in-repo package by its module path; the longest
+        // suffix `internal/auth/service` matches the file key.
+        let files = vec![
+            (
+                file("main.go", Language::Go),
+                parsed(&["main"], &["\"myrepo/internal/auth/service\""], &[]),
+            ),
+            (
+                file("internal/auth/service.go", Language::Go),
+                parsed(&["Login"], &[], &[]),
+            ),
+        ];
+        let g = link(&files);
+        assert!(
+            g.edges[0].contains(&1),
+            "main.go → internal/auth/service.go"
+        );
+    }
+
+    #[test]
+    fn go_external_import_skipped() {
+        // A third-party module path matches no in-repo file → no edge.
+        let files = vec![
+            (
+                file("main.go", Language::Go),
+                parsed(&["main"], &["\"github.com/spf13/cobra\""], &[]),
+            ),
+            (
+                file("internal/auth/service.go", Language::Go),
+                parsed(&["Login"], &[], &[]),
+            ),
+        ];
+        let g = link(&files);
+        assert!(g.edges[0].is_empty(), "external Go import must not bind");
+    }
+
+    #[test]
+    fn go_ambiguous_basename_makes_no_edge() {
+        // Two packages both end in `service`; an import whose path suffix
+        // matches neither falls back to the basename, which is ambiguous → no
+        // edge (mirrors the Rust/Python anti-false-bind guard).
+        let files = vec![
+            (
+                file("main.go", Language::Go),
+                parsed(&["main"], &["\"example.com/pkg/service\""], &[]),
+            ),
+            (
+                file("internal/auth/service.go", Language::Go),
+                parsed(&["A"], &[], &[]),
+            ),
+            (
+                file("internal/billing/service.go", Language::Go),
+                parsed(&["B"], &[], &[]),
+            ),
+        ];
+        let g = link(&files);
+        assert!(g.edges[0].is_empty(), "ambiguous Go basename must not bind");
+    }
+
+    #[test]
+    fn java_fqn_import_resolves_to_in_repo_file() {
+        // `com.example.auth.Service` maps dot→slash to com/example/auth/Service.
+        let files = vec![
+            (
+                file("com/example/App.java", Language::Java),
+                parsed(&["App"], &["com.example.auth.Service"], &[]),
+            ),
+            (
+                file("com/example/auth/Service.java", Language::Java),
+                parsed(&["Service"], &[], &[]),
+            ),
+        ];
+        let g = link(&files);
+        assert!(g.edges[0].contains(&1), "App.java → auth/Service.java");
+    }
+
+    #[test]
+    fn java_stdlib_import_skipped() {
+        let files = vec![
+            (
+                file("com/example/App.java", Language::Java),
+                parsed(&["App"], &["java.util.List"], &[]),
+            ),
+            (
+                file("com/example/auth/Service.java", Language::Java),
+                parsed(&["Service"], &[], &[]),
+            ),
+        ];
+        let g = link(&files);
+        assert!(g.edges[0].is_empty(), "java.util.* must not bind");
+    }
+
+    #[test]
+    fn java_bare_classname_does_not_falsely_bind() {
+        // A bare `Service` (no package path) must not bind to a same-named file
+        // in some unrelated package — only an exact FQN path match resolves.
+        let files = vec![
+            (
+                file("com/example/App.java", Language::Java),
+                parsed(&["App"], &["Service"], &[]),
+            ),
+            (
+                file("com/other/Service.java", Language::Java),
+                parsed(&["Service"], &[], &[]),
+            ),
+        ];
+        let g = link(&files);
+        assert!(g.edges[0].is_empty(), "bare Java class name must not bind");
+    }
+
+    #[test]
+    fn c_include_resolves_relative_to_includer() {
+        // src/app.c includes "util.h"; src/util.h sits beside it.
+        let files = vec![
+            (
+                file("src/app.c", Language::C),
+                parsed(&["main"], &["\"util.h\""], &[]),
+            ),
+            (
+                file("src/util.h", Language::C),
+                parsed(&["helper"], &[], &[]),
+            ),
+        ];
+        let g = link(&files);
+        assert!(g.edges[0].contains(&1), "app.c → util.h");
+    }
+
+    #[test]
+    fn c_external_include_skipped() {
+        // A quoted include to a header not in the repo creates no edge.
+        // (Angle-bracket system includes never reach the linker — the query
+        // only captures string-literal includes.)
+        let files = vec![
+            (
+                file("src/app.c", Language::C),
+                parsed(&["main"], &["\"third_party/foo.h\""], &[]),
+            ),
+            (
+                file("src/util.h", Language::C),
+                parsed(&["helper"], &[], &[]),
+            ),
+        ];
+        let g = link(&files);
+        assert!(g.edges[0].is_empty(), "external C include must not bind");
+    }
+
+    #[test]
+    fn c_ambiguous_include_basename_makes_no_edge() {
+        // Two `util.h` in different dirs; a bare `"util.h"` from a third
+        // directory resolves relative to neither and must not basename-bind.
+        let files = vec![
+            (
+                file("src/app.c", Language::C),
+                parsed(&["main"], &["\"util.h\""], &[]),
+            ),
+            (file("a/util.h", Language::C), parsed(&["h1"], &[], &[])),
+            (file("b/util.h", Language::C), parsed(&["h2"], &[], &[])),
+        ];
+        let g = link(&files);
+        assert!(g.edges[0].is_empty(), "ambiguous C include must not bind");
+    }
+
+    #[test]
+    fn cpp_include_resolves_nested_relative_path() {
+        // src/main.cpp includes "core/engine.hpp"; resolves to src/core/engine.hpp.
+        let files = vec![
+            (
+                file("src/main.cpp", Language::Cpp),
+                parsed(&["main"], &["\"core/engine.hpp\""], &[]),
+            ),
+            (
+                file("src/core/engine.hpp", Language::Cpp),
+                parsed(&["Engine"], &[], &[]),
+            ),
+        ];
+        let g = link(&files);
+        assert!(g.edges[0].contains(&1), "main.cpp → core/engine.hpp");
+    }
 }
