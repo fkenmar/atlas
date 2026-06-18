@@ -75,6 +75,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "rayon",
+ "serde_json",
  "tiktoken-rs",
  "tree-sitter",
  "tree-sitter-c",

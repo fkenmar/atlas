@@ -1,10 +1,11 @@
-//! Pipeline driver. Parses flags (clap derive) and runs the full M1 pipeline:
-//! discover → parse → link → rank → budget → render. The default (and, in M1,
-//! only) subcommand is the implicit `map`; `serve`/`diff` land in later
-//! milestones.
+//! Pipeline driver. Parses flags (clap derive) and runs the full map pipeline:
+//! discover → parse → link → rank → budget → render. Map mode is the implicit
+//! default; `diff` and `serve --mcp` are routed git-style before map parsing.
 
-use std::io::IsTerminal;
+use std::collections::BTreeMap;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
@@ -19,12 +20,41 @@ EXAMPLES:
   atlas src --focus src/auth   Rank files under src/auth higher
   atlas . --no-private         Public API surface only
   atlas . --format json        Emit JSON instead of Markdown
+  atlas . -o atlas-map.md      Atomically write the map to a file
+  atlas . --for-agent          Add a short agent-facing Markdown preamble
+  atlas . --timings            Print stage timings to stderr
   atlas diff HEAD~1 HEAD       Structural delta between two git revisions (or two dirs)
   atlas . > map.md             Save the map (e.g. to feed an agent)
   atlas --completions zsh      Print a shell completion script (bash/zsh/fish/…)
 
 Pipe the output into your AI coding agent's context so it can navigate the repo
 without reading every file. Docs: https://github.com/fkenmar/atlas";
+
+const SUPPORTED_LANGUAGE_SUMMARY: &str = "Python, TypeScript/JavaScript, Rust, Go, Java, and C/C++";
+const SUPPORTED_EXTENSION_SUMMARY: &str = "\
+py, pyi, ts, tsx, mts, cts, js, jsx, mjs, cjs, rs, go, java, c, h, cc, cpp, cxx, hpp, hh";
+const AGENT_PREAMBLE: &str = "\
+> atlas agent note: use this map as a navigation index before opening files.
+> It contains signatures, types, imports, and reverse dependencies only; inspect source before editing implementation.
+
+";
+const EXTENSION_HINT_SKIP_DIRS: &[&str] = &[
+    ".git",
+    ".atlas",
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    "out",
+    "venv",
+    "env",
+    "__pycache__",
+    "site-packages",
+    "vendor",
+    "third_party",
+    "coverage",
+];
+const MAX_EXTENSION_HINT_FILES: usize = 2_000;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -50,6 +80,10 @@ pub struct Cli {
     #[arg(short, long, value_enum, default_value_t = Format::Md)]
     pub format: Format,
 
+    /// Atomically write output to this file instead of stdout.
+    #[arg(short, long, value_name = "PATH")]
+    pub output: Option<PathBuf>,
+
     /// Restrict to languages by extension, e.g. --lang py,rs.
     #[arg(short, long, value_name = "CSV")]
     pub lang: Option<String>,
@@ -62,6 +96,14 @@ pub struct Cli {
     /// Public API surface only — drop private symbols.
     #[arg(long)]
     pub no_private: bool,
+
+    /// Add a short Markdown preamble telling an agent how to use the map.
+    #[arg(long)]
+    pub for_agent: bool,
+
+    /// Print pipeline stage timings to stderr.
+    #[arg(long)]
+    pub timings: bool,
 
     /// Colorize Markdown output: auto (default, only when writing to a
     /// terminal), always, or never. Piped output is never colored.
@@ -118,6 +160,17 @@ pub struct DiffArgs {
     pub no_private: bool,
 }
 
+/// `atlas serve --mcp` — run atlas as a server (ADR 0008). Routed by [`run`]
+/// before the map parser, git-style.
+#[derive(Parser, Debug)]
+#[command(name = "atlas serve", about = "Run atlas as a server")]
+pub struct ServeArgs {
+    /// Run as an MCP server over stdio (newline-delimited JSON-RPC) so an agent
+    /// can pull a fresh map as a tool call.
+    #[arg(long)]
+    pub mcp: bool,
+}
+
 /// Entry point called from `main`. Exits the process with a status code.
 pub fn run() {
     // Git-style dispatch: `atlas diff <old> <new>` routes to the diff command
@@ -129,6 +182,16 @@ pub fn run() {
             std::iter::once("atlas diff".to_string()).chain(args.into_iter().skip(2)),
         );
         std::process::exit(match run_diff(diff) {
+            Ok(()) => 0,
+            Err(code) => code,
+        });
+    }
+    // `atlas serve --mcp` runs the stdio MCP server (ADR 0008).
+    if args.get(1).map(String::as_str) == Some("serve") {
+        let serve = ServeArgs::parse_from(
+            std::iter::once("atlas serve".to_string()).chain(args.into_iter().skip(2)),
+        );
+        std::process::exit(match run_serve(serve) {
             Ok(()) => 0,
             Err(code) => code,
         });
@@ -186,6 +249,17 @@ fn run_diff(args: DiffArgs) -> Result<(), i32> {
     new_tree.cleanup();
     print!("{out}");
     Ok(())
+}
+
+fn run_serve(args: ServeArgs) -> Result<(), i32> {
+    if !args.mcp {
+        eprintln!("atlas: serve currently supports only --mcp");
+        return Err(2);
+    }
+    crate::mcp::serve().map_err(|err| {
+        eprintln!("atlas: MCP server failed: {err}");
+        1
+    })
 }
 
 /// Canonicalize `path` and confirm it's a directory, with actionable error
@@ -312,19 +386,20 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         return Err(2);
     }
 
-    // `serve` is promoted in the README as a planned command; a user who tries
-    // `atlas serve` lands here (clap parses the word as the path). Give a clear
-    // "planned" message instead of a path-not-found error. (`diff` is a real
-    // command now, routed in `run` before parsing — see ADR 0005.)
-    let path_str = cli.path.to_string_lossy();
-    if matches!(path_str.as_ref(), "serve") && !cli.path.exists() {
-        eprintln!(
-            "atlas: '{path_str}' is a planned command, not available yet — \
-             see the roadmap: https://github.com/fkenmar/atlas#project-status"
-        );
+    if cli.for_agent && cli.format != Format::Md {
+        eprintln!("atlas: --for-agent is only supported with Markdown output (--format md)");
         return Err(2);
     }
 
+    // Defensive fallback for direct `run_with` callers: real CLI invocations of
+    // `atlas serve ...` are routed in `run` before map parsing.
+    let path_str = cli.path.to_string_lossy();
+    if matches!(path_str.as_ref(), "serve") && !cli.path.exists() {
+        eprintln!("atlas: '{path_str}' is a command, not a repo path — use `atlas serve --mcp`");
+        return Err(2);
+    }
+
+    let total_start = Instant::now();
     let root = canonicalize_root(&cli.path)?;
 
     let repo_name = root
@@ -333,13 +408,24 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         .unwrap_or_else(|| root.display().to_string());
 
     let langs = parse_langs(cli.lang.as_deref())?;
+    let discover_start = Instant::now();
     let mut files = crate::discover::discover(&root);
     let discovered = files.len();
+    log_timing(
+        cli.timings,
+        "discover",
+        discover_start.elapsed(),
+        &format!("{discovered} source file(s)"),
+    );
     if discovered == 0 {
+        let hint = unsupported_extension_hint(&root)
+            .map(|h| format!(" Detected file extension(s): {h}."))
+            .unwrap_or_default();
         eprintln!(
-            "atlas: no supported source files found under {}. atlas maps Python, \
-             TypeScript/JavaScript, and Rust — is this the repo root? (see --help)",
-            cli.path.display()
+            "atlas: no supported source files found under {}. atlas maps \
+             {SUPPORTED_LANGUAGE_SUMMARY} ({SUPPORTED_EXTENSION_SUMMARY}).{hint} \
+             Is this the repo root? (see --help)",
+            cli.path.display(),
         );
         return Err(1);
     }
@@ -354,13 +440,43 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         }
     }
 
+    let parse_start = Instant::now();
     let mut cache = crate::cache::Cache::open(&root);
     let outcome = crate::parse::parse_all_cached(files, &mut cache);
     cache.save();
+    log_timing(
+        cli.timings,
+        "parse/cache",
+        parse_start.elapsed(),
+        &format!(
+            "{} parsed, {} skipped, {} unwired, {} LOC",
+            outcome.stats.parsed_files,
+            outcome.stats.skipped_files,
+            outcome.stats.unwired_files,
+            outcome.stats.total_lines
+        ),
+    );
+
+    let link_start = Instant::now();
     let graph = crate::link::link(&outcome.files);
+    log_timing(
+        cli.timings,
+        "link",
+        link_start.elapsed(),
+        &format!("{} file node(s)", outcome.files.len()),
+    );
+
+    let rank_start = Instant::now();
     let focus = resolve_focus(&cli.focus, &root, &outcome.files)?;
     let ranking = crate::rank::rank(&graph, &focus);
+    log_timing(
+        cli.timings,
+        "rank",
+        rank_start.elapsed(),
+        &format!("{} focus seed(s)", focus.len()),
+    );
 
+    let budget_start = Instant::now();
     let counter = TiktokenCounter::cl100k().map_err(|err| {
         eprintln!("atlas: could not initialize the tokenizer: {err}");
         1
@@ -378,22 +494,227 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         &opts,
         &counter,
     );
+    log_timing(
+        cli.timings,
+        "budget",
+        budget_start.elapsed(),
+        &format!("{} rendered token(s)", map.rendered_tokens),
+    );
 
-    match cli.format {
+    let render_start = Instant::now();
+    let output = match cli.format {
         Format::Md => {
-            let md = crate::render::markdown::render(&map);
-            if should_color(cli.color) {
-                print!("{}", crate::render::color::colorize(&md));
+            let mut md = crate::render::markdown::render(&map);
+            if cli.for_agent {
+                md = with_agent_preamble(&md);
+            }
+            if cli.output.is_none() && should_color(cli.color) {
+                crate::render::color::colorize(&md)
             } else {
-                print!("{md}");
+                md
             }
         }
         // JSON and XML are structured data for programmatic consumers — never
         // colorized.
-        Format::Json => print!("{}", crate::render::json::render(&map)),
-        Format::Xml => print!("{}", crate::render::xml::render(&map)),
+        Format::Json => crate::render::json::render(&map),
+        Format::Xml => crate::render::xml::render(&map),
+    };
+    log_timing(
+        cli.timings,
+        "render",
+        render_start.elapsed(),
+        &format!("{} byte(s)", output.len()),
+    );
+
+    let write_start = Instant::now();
+    if let Some(path) = cli.output.as_deref() {
+        write_output_atomic(path, &output)?;
+    } else {
+        print!("{output}");
     }
+    log_timing(
+        cli.timings,
+        "write",
+        write_start.elapsed(),
+        cli.output
+            .as_deref()
+            .and_then(Path::to_str)
+            .unwrap_or("stdout"),
+    );
+    log_timing(cli.timings, "total", total_start.elapsed(), "");
     Ok(())
+}
+
+fn with_agent_preamble(md: &str) -> String {
+    let mut out = String::with_capacity(AGENT_PREAMBLE.len() + md.len());
+    out.push_str(AGENT_PREAMBLE);
+    out.push_str(md);
+    out
+}
+
+fn log_timing(enabled: bool, label: &str, duration: Duration, detail: &str) {
+    if !enabled {
+        return;
+    }
+    let millis = duration.as_secs_f64() * 1000.0;
+    if detail.is_empty() {
+        eprintln!("atlas timings: {label:<12} {millis:>8.2} ms");
+    } else {
+        eprintln!("atlas timings: {label:<12} {millis:>8.2} ms  {detail}");
+    }
+}
+
+fn write_output_atomic(path: &Path, contents: &str) -> Result<(), i32> {
+    if path.is_dir() {
+        eprintln!("atlas: output path is a directory: {}", path.display());
+        return Err(2);
+    }
+
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    if !parent.exists() {
+        eprintln!(
+            "atlas: output directory does not exist: {}",
+            parent.display()
+        );
+        return Err(2);
+    }
+    if !parent.is_dir() {
+        eprintln!(
+            "atlas: output parent is not a directory: {}",
+            parent.display()
+        );
+        return Err(2);
+    }
+
+    match write_output_atomic_inner(parent, path, contents) {
+        Ok(()) => Ok(()),
+        Err((tmp, err)) => {
+            let _ = std::fs::remove_file(tmp);
+            eprintln!("atlas: could not write {}: {err}", path.display());
+            Err(1)
+        }
+    }
+}
+
+fn write_output_atomic_inner(
+    parent: &Path,
+    path: &Path,
+    contents: &str,
+) -> Result<(), (PathBuf, std::io::Error)> {
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("atlas-map");
+
+    let mut last_err: Option<(PathBuf, std::io::Error)> = None;
+    for attempt in 0..100 {
+        let tmp = parent.join(format!(".{file_name}.tmp-{}-{attempt}", std::process::id()));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+        {
+            Ok(mut file) => {
+                if let Err(err) = file.write_all(contents.as_bytes()) {
+                    return Err((tmp, err));
+                }
+                if let Err(err) = file.sync_all() {
+                    return Err((tmp, err));
+                }
+                drop(file);
+                replace_file(&tmp, path).map_err(|err| (tmp, err))?;
+                return Ok(());
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                last_err = Some((tmp, err));
+                continue;
+            }
+            Err(err) => return Err((tmp, err)),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| {
+        (
+            parent.join(format!(".{file_name}.tmp-{}", std::process::id())),
+            std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "could not allocate a temporary output path",
+            ),
+        )
+    }))
+}
+
+fn replace_file(tmp: &Path, path: &Path) -> std::io::Result<()> {
+    match std::fs::rename(tmp, path) {
+        Ok(()) => Ok(()),
+        Err(_err) if cfg!(windows) && path.exists() => {
+            std::fs::remove_file(path)?;
+            std::fs::rename(tmp, path)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn unsupported_extension_hint(root: &Path) -> Option<String> {
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut scanned = 0usize;
+    let mut stack = vec![root.to_path_buf()];
+
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if file_type.is_symlink() {
+                continue;
+            }
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if name.starts_with('.') {
+                continue;
+            }
+            if file_type.is_dir() {
+                if EXTENSION_HINT_SKIP_DIRS.contains(&name) {
+                    continue;
+                }
+                stack.push(path);
+            } else if file_type.is_file() {
+                scanned += 1;
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    let ext = ext.to_ascii_lowercase();
+                    *counts.entry(ext).or_default() += 1;
+                }
+                if scanned >= MAX_EXTENSION_HINT_FILES {
+                    break;
+                }
+            }
+        }
+        if scanned >= MAX_EXTENSION_HINT_FILES {
+            break;
+        }
+    }
+
+    if counts.is_empty() {
+        return None;
+    }
+    let mut ranked: Vec<(String, usize)> = counts.into_iter().collect();
+    ranked.sort_by(|(a_ext, a_count), (b_ext, b_count)| {
+        b_count.cmp(a_count).then_with(|| a_ext.cmp(b_ext))
+    });
+    let hint = ranked
+        .into_iter()
+        .take(5)
+        .map(|(ext, count)| format!(".{ext} ({count})"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(hint)
 }
 
 /// Decide whether to ANSI-colorize Markdown output. `auto` colors only when
@@ -423,7 +744,7 @@ fn parse_langs(csv: Option<&str>) -> Result<Vec<Language>, i32> {
             None => {
                 eprintln!(
                     "atlas: unknown --lang value {token:?}. Supported extensions: \
-                     py, pyi, ts, tsx, js, jsx, mjs, cjs, rs (Python, TypeScript/JavaScript, Rust)"
+                     {SUPPORTED_EXTENSION_SUMMARY} ({SUPPORTED_LANGUAGE_SUMMARY})"
                 );
                 return Err(2);
             }
@@ -512,8 +833,11 @@ mod tests {
         assert_eq!(cli.path, PathBuf::from("."));
         assert_eq!(cli.budget, DEFAULT_BUDGET);
         assert_eq!(cli.format, Format::Md);
+        assert!(cli.output.is_none());
         assert!(cli.focus.is_empty());
         assert!(!cli.no_private);
+        assert!(!cli.for_agent);
+        assert!(!cli.timings);
         assert!(cli.lang.is_none());
     }
 
@@ -531,20 +855,30 @@ mod tests {
             "--focus",
             "src/api/routes.ts",
             "--no-private",
+            "--for-agent",
+            "--timings",
+            "--output",
+            "atlas-map.md",
         ]);
         assert_eq!(cli.path, PathBuf::from("../somewhere"));
         assert_eq!(cli.budget, 4096);
         assert_eq!(cli.lang.as_deref(), Some("py,rs"));
         assert_eq!(cli.focus, vec!["src/auth", "src/api/routes.ts"]);
         assert!(cli.no_private);
+        assert!(cli.for_agent);
+        assert!(cli.timings);
+        assert_eq!(cli.output, Some(PathBuf::from("atlas-map.md")));
     }
 
     #[test]
     fn short_flags_work() {
-        let cli = parse(&["atlas", "-b", "512", "-f", "json", "-l", "rs"]);
+        let cli = parse(&[
+            "atlas", "-b", "512", "-f", "json", "-l", "rs", "-o", "map.json",
+        ]);
         assert_eq!(cli.budget, 512);
         assert_eq!(cli.format, Format::Json);
         assert_eq!(cli.lang.as_deref(), Some("rs"));
+        assert_eq!(cli.output, Some(PathBuf::from("map.json")));
     }
 
     #[test]
@@ -576,8 +910,38 @@ mod tests {
             parse_langs(Some("py,rs")).unwrap(),
             vec![Language::Python, Language::Rust]
         );
+        assert_eq!(
+            parse_langs(Some("go,java,c,cpp")).unwrap(),
+            vec![Language::Go, Language::Java, Language::C, Language::Cpp]
+        );
         assert_eq!(parse_langs(None).unwrap(), Vec::<Language>::new());
         assert_eq!(parse_langs(Some("cobol")).err(), Some(2));
+    }
+
+    #[test]
+    fn agent_preamble_wraps_markdown() {
+        let wrapped = with_agent_preamble("# atlas: demo\n");
+        assert!(wrapped.starts_with("> atlas agent note:"));
+        assert!(wrapped.ends_with("# atlas: demo\n"));
+    }
+
+    #[test]
+    fn atomic_output_write_replaces_existing_file() {
+        let dir = std::env::temp_dir().join(format!("atlas-cli-output-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("map.md");
+        std::fs::write(&out, "old").unwrap();
+
+        write_output_atomic(&out, "new").unwrap();
+        assert_eq!(std::fs::read_to_string(&out).unwrap(), "new");
+        let leftovers = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".tmp-"))
+            .count();
+        assert_eq!(leftovers, 0);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

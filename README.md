@@ -108,11 +108,15 @@ atlas . --lang py,rs             # only these languages
 atlas . --no-private             # public API surface only
 atlas . --format json            # JSON instead of Markdown
 atlas . --format xml             # XML, for wrapping in a Claude prompt
+atlas . -o atlas-map.md          # atomically write to a file
+atlas . --for-agent              # add a short Markdown note for agent context
+atlas . --timings                # print stage timings to stderr
 atlas diff HEAD~1 HEAD           # structural delta between two git revisions (or two dirs)
+atlas serve --mcp                # experimental MCP stdio server
 atlas . --color always           # force ANSI color (auto-detects a terminal otherwise)
 ```
 
-When you run atlas in a terminal the Markdown map is colorized for scannability; piped or redirected output stays plain, so feeding it to an agent or a file is unaffected (`--color never` to disable, `NO_COLOR` is honored).
+When you run atlas in a terminal the Markdown map is colorized for scannability; piped, redirected, or `--output` file output stays plain, so feeding it to an agent or a file is unaffected (`--color never` to disable, `NO_COLOR` is honored).
 
 **Shell completions:** `atlas --completions <bash|zsh|fish|powershell|elvish>` prints a completion script — e.g. `atlas --completions zsh > ~/.zfunc/_atlas`.
 
@@ -123,8 +127,10 @@ atlas caches parse results in a `.atlas/` directory at the repo root so re-runs 
 Pipe the output straight into your agent's context, or save it to a file:
 
 ```
-atlas . > map.md
+atlas . -o map.md
 ```
+
+`--output` writes through a same-directory temporary file and then renames it into place, so a failed run does not leave a partial map at the final path.
 
 ---
 
@@ -135,10 +141,16 @@ atlas writes the map to stdout, so it drops into any agent's context.
 **Save it and reference it** — works with Claude Code, Cursor, Windsurf, Copilot, or any chat:
 
 ```
-atlas . > atlas-map.md
+atlas . -o atlas-map.md
 ```
 
 Then `@`-mention `atlas-map.md` in your prompt (or paste it in). Regenerate it whenever the structure changes — re-runs are warm-cached and finish in ~80 ms, so it's cheap to keep fresh.
+
+For a pasted or attached Markdown map, `--for-agent` prepends a short note telling the agent to treat the map as a navigation index, not as source:
+
+```
+atlas . --for-agent -o atlas-map.md
+```
 
 **Pipe it inline** to any CLI agent:
 
@@ -154,7 +166,7 @@ atlas . --focus src/auth --focus src/api > atlas-map.md
 
 **Keep it in the repo** so every contributor and agent starts oriented — commit `atlas-map.md` and regenerate it in a pre-commit hook or CI.
 
-> An MCP server (`atlas serve --mcp`), so agents can pull a fresh map as a tool call, is on the roadmap.
+> Experimental on `dev`: `atlas serve --mcp` exposes a `get_map` tool over stdio JSON-RPC/MCP so compatible agents can pull a fresh map directly.
 
 ---
 
@@ -175,7 +187,7 @@ It reads your repo with [tree-sitter](https://tree-sitter.github.io/tree-sitter/
 
 ## Troubleshooting
 
-- **Empty map / "0 files".** atlas found no supported source under that path. Check the language is one it maps (Python, TS/JS, Rust) and that you're pointing at the project root — not a single file, and not a vendored or ignored directory.
+- **Empty map / "0 files".** atlas found no supported source under that path. Check the language is one it maps (Python, TS/JS, Rust, Go, Java, C/C++) and that you're pointing at the project root — not a single file, and not a vendored or ignored directory. The error includes the top file extensions atlas saw to make wrong-root or unsupported-language cases easier to spot.
 - **`command not found: atlas`.** `~/.cargo/bin` isn't on your `PATH`. Add it (rustup's installer normally does), or run the binary by its full path.
 - **A symbol is wrong or missing.** That's usually a tree-sitter extraction bug — please [open an issue](https://github.com/fkenmar/atlas/issues/new?template=bug_report.md) with a minimal snippet that reproduces it.
 
@@ -187,7 +199,7 @@ Alpha. The core works end-to-end and is benchmark-tested, but the CLI and output
 
 `atlas diff <old> <new>` shows the structural delta between two trees — added/removed/changed signatures and import edges — so an agent sees what moved without re-reading the tree. Each side is a directory **or a git revision** (`atlas diff HEAD~1 HEAD`, `atlas diff v0.2.0 .`); revisions are checked out via `git` under the hood (no extra setup). Markdown by default; `--format json` or `xml` for tooling and CI.
 
-Coming next: an MCP server so agents can query the map directly (`atlas serve --mcp`).
+Experimental on `dev`: an MCP stdio server (`atlas serve --mcp`) lets compatible agents query the map directly through a `get_map` tool.
 
 ---
 

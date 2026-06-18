@@ -13,6 +13,7 @@ pub mod diff;
 pub mod discover;
 pub mod lang;
 pub mod link;
+pub mod mcp;
 pub mod parse;
 pub mod rank;
 pub mod render;

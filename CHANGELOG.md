@@ -16,6 +16,21 @@ benchmark delta.
   unaffected. Verified cold==warm output and run-to-run determinism.
 
 ### Added
+- **MCP server (`atlas serve --mcp`, #7).** atlas now runs as an MCP server over
+  stdio (newline-delimited JSON-RPC 2.0) so an LLM agent can pull a fresh map as
+  a tool call instead of being handed a static one. One tool, `get_map(path,
+  budget?, no_private?, format?)`, returns the rendered map (md/json/xml).
+  Hand-dispatched with `serde_json` (no framework); the protocol core is a pure,
+  unit-tested `handle()` function. See ADR 0008.
+- **Experimental agent-output CLI polish (`dev`).** `atlas map` mode now has
+  `-o/--output` for same-directory temp-file + rename writes, `--for-agent` for
+  a short Markdown-only agent preamble, `--timings` for stage timings on stderr,
+  and empty-map diagnostics that report the top file extensions atlas saw. Normal
+  stdout output is unchanged unless a new flag is used.
+- **Experimental MCP stdio server (`atlas serve --mcp`, #7).** Adds a
+  hand-dispatched JSON-RPC/MCP path with `initialize`, `tools/list`,
+  `tools/call`, `ping`, and one read-only `get_map` tool that returns Markdown,
+  JSON, or XML map content. Uses `serde_json` only; see ADR 0008.
 - **Tier 2 language grammars: Go, Java, C, C++ (#10).** atlas now maps Go
   (`.go`), Java (`.java`), and C/C++ (`.c`/`.h`/`.cpp`/`.hpp`/…) alongside the
   Tier 1 set (Python, TypeScript/JavaScript, Rust) — functions/methods, types
