@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
-use crate::budget::{pack, BudgetOptions, BudgetedMap, DEFAULT_BUDGET};
+use crate::budget::{BudgetedMap, DEFAULT_BUDGET};
 
 /// The MCP protocol revision this server speaks.
 const PROTOCOL_VERSION: &str = "2024-11-05";
@@ -175,40 +175,20 @@ fn confine(requested: &str, root: &Path) -> Result<PathBuf, String> {
     Ok(target)
 }
 
-/// Run discover → parse → link → rank → budget for `root` (no `--focus`). The
-/// CLI's `run_with` keeps its own copy of this pipeline for now (ADR 0008).
+/// Build the map via the supported library API (#69), read-only (#102): `cache:
+/// false` so an agent's map pull never writes a `.atlas` cache into the target
+/// repo.
 fn build_map(root: &Path, budget: usize, no_private: bool) -> Result<BudgetedMap, String> {
-    let repo_name = root
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| root.display().to_string());
-    let files = crate::discover::discover(root);
-    if files.is_empty() {
-        return Err(format!(
-            "no supported source files found under {}",
-            root.display()
-        ));
-    }
-    // Read-only (#102): parse uncached so an agent's map pull never writes a
-    // `.atlas` cache into the target repo.
-    let outcome = crate::parse::parse_all(files);
-    let graph = crate::link::link(&outcome.files);
-    let ranking = crate::rank::rank(&graph, &[]);
-    let counter = crate::budget::TiktokenCounter::cl100k()
-        .map_err(|e| format!("could not initialize the tokenizer: {e}"))?;
-    let opts = BudgetOptions {
-        budget_tokens: budget,
-        no_private,
-    };
-    Ok(pack(
-        &outcome.files,
-        &graph,
-        &ranking,
-        &repo_name,
-        outcome.stats,
-        &opts,
-        &counter,
-    ))
+    crate::api::build_map(
+        root,
+        &crate::api::MapOptions {
+            budget,
+            no_private,
+            langs: Vec::new(),
+            cache: false,
+        },
+    )
+    .map_err(|e| e.to_string())
 }
 
 fn result(id: Value, result: Value) -> Value {

@@ -16,6 +16,14 @@ benchmark delta.
   unaffected. Verified cold==warm output and run-to-run determinism.
 
 ### Added
+- **Supported library API for embedding (#69).** `atlas::api::build_map(path,
+  &MapOptions)` produces a `BudgetedMap` programmatically (discover → parse →
+  link → rank → budget) for agent frameworks that embed atlas instead of shelling
+  out; render it with any `atlas::render::*` renderer. Crate-level docs + an
+  `examples/embed.rs`; `atlas::api` is the *supported* surface (the per-stage
+  modules may change between minor releases), with library-API semver tracked
+  separately from CLI/output-schema changes. The MCP server now builds maps
+  through this API, removing a duplicated pipeline.
 - **`atlas explain <path>` (#94).** A rank-explanation debug command: for a file
   it reports its rank position, PageRank score, importer count (references in),
   import count (files it imports), and whether `--focus` boosted it — so users
