@@ -9,6 +9,17 @@ benchmark delta.
 ## [Unreleased]
 
 ### Added
+- **Tier 2 language grammars: Go, Java, C, C++ (#10).** atlas now maps Go
+  (`.go`), Java (`.java`), and C/C++ (`.c`/`.h`/`.cpp`/`.hpp`/…) alongside the
+  Tier 1 set (Python, TypeScript/JavaScript, Rust) — functions/methods, types
+  (struct/class/interface/enum), fields, constants, and import/include edges,
+  each with a tags.scm validated by a committed extraction snapshot. Visibility
+  is per-language (Go capitalization, Java/TS `private`/`protected`, C/C++
+  `static`). Go import resolution matches in-repo packages by longest path
+  suffix; Java FQNs and C/C++ `#include`s resolve like dotted/relative paths.
+  Fixes a constant-name filter that wrongly dropped non-`UPPER_SNAKE` constants
+  for languages with an explicit `const` keyword (Go's PascalCase consts now
+  appear; the filter still applies to Python/TS assignment-style constants).
 - **`atlas diff <old> <new>`.** A structural delta between two trees: added/removed
   files, and per common file the added/removed symbols, **changed signatures**, and
   added/removed import edges — so an agent sees what moved at the signature/edge level

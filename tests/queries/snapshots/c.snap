@@ -1,0 +1,12 @@
+# extraction snapshot for queries/c/tags.scm
+# regenerate: UPDATE_SNAPSHOTS=1 cargo test query_  (review the diff!)
+L7   Class     Public  Point           :: struct Point {
+L8   Field     Public  x               :: int x;
+L9   Field     Public  y               :: int y;
+L12  Enum      Public  Color           :: enum Color {
+L18  TypeAlias Public  PointAlias      :: typedef struct Point PointAlias;
+L21  Function  Public  reset           :: void reset(void);
+L23  Function  Public  add             :: int add(int a, int b) {
+L27  Function  Private helper          :: static int helper(int x) {
+imports: #include "config.h", #include <stdio.h>
+references: add

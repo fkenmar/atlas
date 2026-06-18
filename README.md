@@ -11,7 +11,7 @@
   <a href="https://github.com/fkenmar/atlas/releases"><img src="https://img.shields.io/badge/release-v0.2.1--alpha-4F46E5?style=flat-square" alt="Release"></a>
   <a href="https://github.com/fkenmar/atlas/actions/workflows/ci.yml"><img src="https://github.com/fkenmar/atlas/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/built%20with-Rust-DEA584?style=flat-square&logo=rust&logoColor=white" alt="Built with Rust"></a>
-  <img src="https://img.shields.io/badge/languages-Py%20%C2%B7%20TS%20%C2%B7%20Rust-F59E0B?style=flat-square" alt="Languages: Py · TS · Rust">
+  <img src="https://img.shields.io/badge/languages-Py%20%C2%B7%20TS%20%C2%B7%20Rust%20%C2%B7%20Go%20%C2%B7%20Java%20%C2%B7%20C%2FC%2B%2B-F59E0B?style=flat-square" alt="Languages: Py · TS · Rust · Go · Java · C/C++">
 </p>
 
 <sub>
@@ -54,7 +54,7 @@ used by: parse.rs
 
 Files are ordered by importance (a PageRank over the import graph), `#1` being the most central. Each file shows its public symbols, what it imports, and what depends on it — everything an agent needs to navigate, nothing it doesn't. The header reports the budget and the actual `rendered` token count.
 
-**What it maps:** Python (`.py`, `.pyi`), TypeScript/JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, …), and Rust (`.rs`). It honors your `.gitignore` and an optional `.atlasignore`, and always skips hidden directories and common vendored/build folders (`node_modules`, `target`, `dist`, `build`, `venv`, `__pycache__`, `vendor`, …). If a file you expected isn't there, it's almost always an unsupported language or a skipped directory.
+**What it maps:** Python (`.py`, `.pyi`), TypeScript/JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, …), Rust (`.rs`), Go (`.go`), Java (`.java`), and C/C++ (`.c`, `.h`, `.cpp`, `.hpp`, …). It honors your `.gitignore` and an optional `.atlasignore`, and always skips hidden directories and common vendored/build folders (`node_modules`, `target`, `dist`, `build`, `venv`, `__pycache__`, `vendor`, …). If a file you expected isn't there, it's almost always an unsupported language or a skipped directory.
 
 ---
 

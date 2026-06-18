@@ -29,7 +29,7 @@ fn main() -> ExitCode {
         .and_then(|e| e.to_str())
         .and_then(Language::from_extension);
     let Some(lang) = lang else {
-        eprintln!("dump-ast: {path} is not a Tier 1 language file (py/ts/js/rs)");
+        eprintln!("dump-ast: {path} is not a supported language file (py/ts/js/rs/go/java/c/cpp)");
         return ExitCode::FAILURE;
     };
     let Some(grammar) = lang.grammar() else {

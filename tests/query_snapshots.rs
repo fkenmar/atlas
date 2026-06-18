@@ -65,6 +65,26 @@ fn query_rust_tags_contract() {
     assert_tags_contract("rust");
 }
 
+#[test]
+fn query_go_tags_contract() {
+    assert_tags_contract("go");
+}
+
+#[test]
+fn query_java_tags_contract() {
+    assert_tags_contract("java");
+}
+
+#[test]
+fn query_c_tags_contract() {
+    assert_tags_contract("c");
+}
+
+#[test]
+fn query_cpp_tags_contract() {
+    assert_tags_contract("cpp");
+}
+
 /// Parse a committed fixture, render its extraction, and diff against the
 /// committed snapshot. `UPDATE_SNAPSHOTS=1` regenerates (review the diff like
 /// code). Covers every wired Tier 1 grammar so a query change in any language
@@ -131,8 +151,36 @@ fn query_rust_fixture_snapshot() {
 }
 
 #[test]
-fn query_fixtures_exist_for_every_tier1_language() {
-    for fixture in ["python.py", "typescript.ts", "rust.rs"] {
+fn query_go_fixture_snapshot() {
+    assert_fixture_snapshot("go", "go", atlas::lang::Language::Go);
+}
+
+#[test]
+fn query_java_fixture_snapshot() {
+    assert_fixture_snapshot("java", "java", atlas::lang::Language::Java);
+}
+
+#[test]
+fn query_c_fixture_snapshot() {
+    assert_fixture_snapshot("c", "c", atlas::lang::Language::C);
+}
+
+#[test]
+fn query_cpp_fixture_snapshot() {
+    assert_fixture_snapshot("cpp", "cpp", atlas::lang::Language::Cpp);
+}
+
+#[test]
+fn query_fixtures_exist_for_every_wired_language() {
+    for fixture in [
+        "python.py",
+        "typescript.ts",
+        "rust.rs",
+        "go.go",
+        "java.java",
+        "c.c",
+        "cpp.cpp",
+    ] {
         let path = format!("tests/queries/fixtures/{fixture}");
         assert!(
             std::path::Path::new(&path).exists(),

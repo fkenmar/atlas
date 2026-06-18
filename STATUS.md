@@ -174,6 +174,25 @@ Gate green: 79 lib tests (+9 xml: schema/escaping/determinism/adversarial
 round-trip), clippy clean, real-parser validation on the 5,285-LOC self-map.
 M3 board cell trimmed to "Tier 2 grammars, atlas diff."
 
+## Tier 2 grammars — Go / Java / C / C++ (2026-06-18, closes #10)
+
+atlas now maps **Go, Java, C, and C++** alongside Tier 1 (Python/TS/Rust) —
+maintainer approved the four `tree-sitter-{go,java,c,cpp}` crates. Each has a
+hand-written `tags.scm` (grounded in real ASTs via `dump-ast`) validated by a
+committed extraction snapshot; per-language visibility (Go capitalization,
+Java/TS modifiers, C/C++ `static`); and import resolution (Go longest-suffix
+package match, Java FQN like Python, C/C++ `#include` like a TS relative path).
+Consistent with Tier 1, enums are captured but their members are not. Fixed a
+shared bug: the `UPPER_SNAKE` constant-name filter wrongly dropped Go's explicit
+`const` decls (PascalCase) — it now applies only to Python/TS assignment-style
+constant captures (Python/TS/Rust snapshots byte-unchanged, verified). Gate:
+100 lib + 15 query (+8) + 7 integration tests, clippy + fmt clean; end-to-end
+map verified across all seven languages. **This was the last M3 breadth item on
+the NOT-YET board.**
+
+(A billed N=5 agent-task benchmark run #1/#14 was authorized and dispatched but
+did not finish before a session limit — re-run when convenient.)
+
 ## Board
 
 | NOW | NEXT | NOT-YET |
@@ -182,7 +201,7 @@ M3 board cell trimmed to "Tier 2 grammars, atlas diff."
 | ~~Rust grammar (tree-sitter-rust)~~ ✅ done 2026-06-16 | rayon parallel parse (M1) | --watch daemon (M2) |
 | ~~Import linking → index-based graph (ADR 0002)~~ ✅ done 2026-06-16 | clap CLI: --budget/--format/--focus (M1; opens the CI self-map gate) | --focus personalization (M2) |
 | ~~PageRank over the graph~~ ✅ done 2026-06-16 | ~~.gitignore/.repomapignore in discover (FR-7)~~ ✅ done 2026-06-16 | cargo-dist packaging (M2) |
-| ~~tiktoken budgeting + degradation ladder~~ ✅ code done 2026-06-16 (bench owed at integration) | Refine exploration-token metric toward PRD definition (tokens before first correct edit) | Tier 2 grammars (M3) |
+| ~~tiktoken budgeting + degradation ladder~~ ✅ code done 2026-06-16 (bench owed at integration) | Refine exploration-token metric toward PRD definition (tokens before first correct edit) | ~~Tier 2 grammars~~ ✅ done 2026-06-18 (#10) |
 | ~~clap CLI + full pipeline wired (discover→…→render)~~ ✅ done 2026-06-16 | | |
 | ~~Exclude inline #[cfg(test)] code from extraction~~ ✅ done 2026-06-16 (self-map: 2036 tok degraded → 1749 tok at FULL detail, 16/16 files) | | |
 | Checkpoint benchmark (pytest with-map vs baseline) ← next | | |

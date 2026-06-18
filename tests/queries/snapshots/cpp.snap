@@ -1,0 +1,16 @@
+# extraction snapshot for queries/cpp/tags.scm
+# regenerate: UPDATE_SNAPSHOTS=1 cargo test query_  (review the diff!)
+L7   Module    Public  service         :: namespace service {
+L9   Class     Public  Service         :: class Service {
+L11  Method    Public  Service         :: Service(int count);
+L12  Method    Public  total           :: int total() const;
+L15  Method    Public  helper          :: int helper(int x);
+L16  Field     Public  count_          :: int count_;
+L19  Class     Public  Point           :: struct Point {
+L20  Field     Public  x               :: int x;
+L21  Field     Public  y               :: int y;
+L24  Enum      Public  Level           :: enum class Level {
+L29  TypeAlias Public  Id              :: using Id = int;
+L31  Function  Public  add             :: int add(int a, int b) {
+imports: #include "config.h", #include <string>
+references: add

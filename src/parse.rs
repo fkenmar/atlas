@@ -225,10 +225,15 @@ fn parse_source(file: &SourceFile, source: &str) -> Option<ParsedFile> {
         match (definition, reference) {
             (Some(kind), _) => {
                 let Some(name) = name_text else { continue };
-                // The constant pattern matches every module-level assignment;
-                // keep only conventional UPPER_SNAKE constants (documented in
-                // the tags.scm files).
-                if kind == SymbolKind::Constant && !is_const_name(name) {
+                // Python/TS capture constants from broad assignment patterns, so
+                // keep only conventional UPPER_SNAKE names there. Go and Rust
+                // capture an explicit `const`/`static` construct — those are
+                // constants regardless of case (Go's exported consts are
+                // PascalCase), so they are not name-filtered.
+                if kind == SymbolKind::Constant
+                    && matches!(file.lang, Language::Python | Language::TypeScript)
+                    && !is_const_name(name)
+                {
                     continue;
                 }
                 let signature = lines
@@ -370,12 +375,39 @@ fn visibility_of(lang: Language, signature: &str, name: &str) -> Visibility {
                 Visibility::Private
             }
         }
-        Language::TypeScript => {
+        Language::TypeScript | Language::Java => {
+            // TS: `private`/`protected` member modifiers mark non-public. Java
+            // shares the same rule — a `private`/`protected` modifier before the
+            // name is non-public; `public`, package-private, and top-level
+            // declarations read as public (the visible API surface).
             let before_name = signature.split(name).next().unwrap_or("");
             if before_name
                 .split_whitespace()
                 .any(|w| w == "private" || w == "protected")
             {
+                Visibility::Private
+            } else {
+                Visibility::Public
+            }
+        }
+        Language::Go => {
+            // Go: an identifier is exported iff its first letter is uppercase.
+            // No keyword involved — the name alone decides.
+            if name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            }
+        }
+        Language::C | Language::Cpp => {
+            // C/C++: a `static` free function or file-scope variable has
+            // internal linkage (file-private); everything else is part of the
+            // externally visible surface. C++ class-member access specifiers
+            // aren't reflected on the per-declaration signature line, so this
+            // intentionally treats members as public — acceptable since it only
+            // affects the budget ladder's drop-private rung.
+            let before_name = signature.split(name).next().unwrap_or("");
+            if before_name.split_whitespace().any(|w| w == "static") {
                 Visibility::Private
             } else {
                 Visibility::Public
@@ -400,10 +432,18 @@ fn compiled_query(lang: Language) -> Option<&'static Query> {
     static PYTHON: OnceLock<Option<Query>> = OnceLock::new();
     static TYPESCRIPT: OnceLock<Option<Query>> = OnceLock::new();
     static RUST: OnceLock<Option<Query>> = OnceLock::new();
+    static GO: OnceLock<Option<Query>> = OnceLock::new();
+    static JAVA: OnceLock<Option<Query>> = OnceLock::new();
+    static C: OnceLock<Option<Query>> = OnceLock::new();
+    static CPP: OnceLock<Option<Query>> = OnceLock::new();
     match lang {
         Language::Python => PYTHON.get_or_init(|| build_query(lang)).as_ref(),
         Language::TypeScript => TYPESCRIPT.get_or_init(|| build_query(lang)).as_ref(),
         Language::Rust => RUST.get_or_init(|| build_query(lang)).as_ref(),
+        Language::Go => GO.get_or_init(|| build_query(lang)).as_ref(),
+        Language::Java => JAVA.get_or_init(|| build_query(lang)).as_ref(),
+        Language::C => C.get_or_init(|| build_query(lang)).as_ref(),
+        Language::Cpp => CPP.get_or_init(|| build_query(lang)).as_ref(),
     }
 }
 

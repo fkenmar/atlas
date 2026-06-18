@@ -1,0 +1,14 @@
+# extraction snapshot for queries/go/tags.scm
+# regenerate: UPDATE_SNAPSHOTS=1 cargo test query_  (review the diff!)
+L11  Constant  Public  APIVersion      :: const APIVersion = "1.0"
+L13  Constant  Private internalFlag    :: const internalFlag = false
+L16  Function  Public  TopLevel        :: func TopLevel(x int) int {
+L20  Function  Private helper          :: func helper(x int) int {
+L25  Class     Public  Service         :: type Service struct {
+L26  Field     Public  Name            :: Name  string
+L27  Field     Private count           :: count int
+L31  Interface Public  Runner          :: type Runner interface {
+L36  Method    Public  Run             :: func (s *Service) Run() error {
+L41  Method    Private reset           :: func (s *Service) reset() {
+imports: "fmt", "strings"
+references: Count, Println, helper

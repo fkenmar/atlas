@@ -164,6 +164,13 @@ impl FileIndex {
             Language::Python => self.resolve_python(import),
             Language::TypeScript => self.resolve_typescript(import, from_rel),
             Language::Rust => self.resolve_rust(import),
+            Language::Go => self.resolve_go(import),
+            // Java FQNs (`com.example.Foo`) map dot-to-slash exactly like
+            // Python dotted module paths.
+            Language::Java => self.resolve_python(import),
+            // C/C++ `#include "path/to/header.h"` is a file path relative to
+            // the including file, resolved like a TS relative specifier.
+            Language::C | Language::Cpp => self.resolve_include(import, from_rel),
         }
     }
 
@@ -229,6 +236,45 @@ impl FileIndex {
         // every segment would bind `crate::missing::auth::login` to an
         // unrelated `auth.rs` (S2); the top segment is the least-bad guess.
         self.unique_basename(first)
+    }
+
+    /// Go imports are quoted module paths (`"github.com/org/repo/pkg/sub"`).
+    /// The leading domain segments are the external module prefix, not in-repo
+    /// directories, so try the longest path suffix first, then fall back to the
+    /// final package segment by unique basename. External-only paths miss.
+    fn resolve_go(&self, import: &str) -> Option<usize> {
+        let spec = import.trim().trim_matches('"');
+        let segments: Vec<&str> = spec.split('/').filter(|s| !s.is_empty()).collect();
+        // Longest-suffix path match: a local package `internal/auth` matches the
+        // import tail `.../internal/auth`.
+        for start in 0..segments.len() {
+            let candidate = segments[start..].join("/");
+            if let Some(&idx) = self.by_path.get(&candidate) {
+                return Some(idx);
+            }
+        }
+        // Fallback: the final segment (the package name) by unique basename.
+        segments.last().and_then(|last| self.unique_basename(last))
+    }
+
+    /// C/C++ `#include` target. The captured text is the quoted path
+    /// (`"sub/header.h"`); resolve it relative to the including file like a TS
+    /// relative specifier. Angle-bracket system includes never reach here (the
+    /// query only captures string-literal includes).
+    fn resolve_include(&self, import: &str, from_rel: &str) -> Option<usize> {
+        let spec = strip_extension(import.trim().trim_matches('"'));
+        let from_dir = from_rel.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+        // Try relative-to-includer first, then relative-to-root (common for
+        // includes written against an include/ root).
+        if let Some(joined) = normalize_path(from_dir, spec) {
+            if let Some(&idx) = self.by_path.get(&joined) {
+                return Some(idx);
+            }
+        }
+        self.by_path
+            .get(spec)
+            .copied()
+            .or_else(|| self.unique_basename(spec.rsplit('/').next().unwrap_or(spec)))
     }
 
     fn unique_basename(&self, base: &str) -> Option<usize> {
