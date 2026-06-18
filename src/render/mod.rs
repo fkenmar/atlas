@@ -7,6 +7,7 @@
 //! never HashMap iteration order.
 
 pub mod color;
+pub mod diff;
 pub mod json;
 pub mod markdown;
 pub mod xml;

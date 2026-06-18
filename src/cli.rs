@@ -19,6 +19,7 @@ EXAMPLES:
   atlas src --focus src/auth   Rank files under src/auth higher
   atlas . --no-private         Public API surface only
   atlas . --format json        Emit JSON instead of Markdown
+  atlas diff old/ new/         Structural delta between two trees (added/removed/changed)
   atlas . > map.md             Save the map (e.g. to feed an agent)
   atlas --completions zsh      Print a shell completion script (bash/zsh/fish/…)
 
@@ -93,13 +94,111 @@ pub enum Format {
     Xml,
 }
 
+/// `atlas diff <old> <new>` — structural delta between two trees (ADR 0005).
+/// Routed by [`run`] before the map parser, git-style, so it stays out of the
+/// flat map `Cli`.
+#[derive(Parser, Debug)]
+#[command(
+    name = "atlas diff",
+    about = "Structural diff of the map between two trees"
+)]
+pub struct DiffArgs {
+    /// The old / base tree.
+    pub old: PathBuf,
+    /// The new / changed tree.
+    pub new: PathBuf,
+    /// Restrict to languages by extension, e.g. --lang py,rs.
+    #[arg(short, long, value_name = "CSV")]
+    pub lang: Option<String>,
+    /// Public API surface only — drop private symbols before comparing.
+    #[arg(long)]
+    pub no_private: bool,
+}
+
 /// Entry point called from `main`. Exits the process with a status code.
 pub fn run() {
+    // Git-style dispatch: `atlas diff <old> <new>` routes to the diff command
+    // before the map parser sees the args (ADR 0005); everything else is the
+    // implicit `map` command.
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("diff") {
+        let diff = DiffArgs::parse_from(
+            std::iter::once("atlas diff".to_string()).chain(args.into_iter().skip(2)),
+        );
+        std::process::exit(match run_diff(diff) {
+            Ok(()) => 0,
+            Err(code) => code,
+        });
+    }
     let cli = Cli::parse();
     std::process::exit(match run_with(cli) {
         Ok(()) => 0,
         Err(code) => code,
     })
+}
+
+/// `atlas diff <old> <new>`: parse both trees fully (no rank/budget) and print
+/// the structural delta (ADR 0005). Exit 0 whether or not anything changed —
+/// the diff is informational (PRD open question on CI-gating left for later).
+fn run_diff(args: DiffArgs) -> Result<(), i32> {
+    let langs = parse_langs(args.lang.as_deref())?;
+    let old_files = discover_tree(&args.old, &langs)?;
+    let new_files = discover_tree(&args.new, &langs)?;
+    let old_outcome = crate::parse::parse_all(old_files);
+    let new_outcome = crate::parse::parse_all(new_files);
+    let opts = crate::diff::DiffOptions {
+        no_private: args.no_private,
+    };
+    let delta = crate::diff::diff(&old_outcome.files, &new_outcome.files, &opts);
+    let out = crate::render::diff::render(
+        &delta,
+        &args.old.display().to_string(),
+        &args.new.display().to_string(),
+        &old_outcome.stats,
+        &new_outcome.stats,
+    );
+    print!("{out}");
+    Ok(())
+}
+
+/// Canonicalize `path` and confirm it's a directory, with actionable error
+/// messages. Shared by the map and diff commands so a bad path reports the same
+/// helpful guidance either way (NotFound / PermissionDenied / not-a-directory).
+fn canonicalize_root(path: &Path) -> Result<PathBuf, i32> {
+    let root = path.canonicalize().map_err(|err| {
+        match err.kind() {
+            std::io::ErrorKind::NotFound => eprintln!(
+                "atlas: path not found: {} — atlas maps a directory; pass a repo root, \
+                 or omit the path to map the current folder",
+                path.display()
+            ),
+            std::io::ErrorKind::PermissionDenied => {
+                eprintln!("atlas: permission denied reading {}", path.display())
+            }
+            _ => eprintln!("atlas: cannot open {}: {err}", path.display()),
+        }
+        2
+    })?;
+    if !root.is_dir() {
+        eprintln!(
+            "atlas: {} is not a directory — atlas maps a repository root, not a single file",
+            path.display()
+        );
+        return Err(2);
+    }
+    Ok(root)
+}
+
+/// Discover + language-filter one side of a diff. An empty tree is allowed (it
+/// diffs as all-added or all-removed); a missing path or non-directory is an
+/// error.
+fn discover_tree(path: &Path, langs: &[Language]) -> Result<Vec<crate::discover::SourceFile>, i32> {
+    let root = canonicalize_root(path)?;
+    let mut files = crate::discover::discover(&root);
+    if !langs.is_empty() {
+        files.retain(|f| langs.contains(&f.lang));
+    }
+    Ok(files)
 }
 
 fn run_with(cli: Cli) -> Result<(), i32> {
@@ -116,11 +215,12 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         return Err(2);
     }
 
-    // `serve`/`diff` are promoted in the README as planned commands; a user who
-    // tries `atlas serve` lands here (clap parses the word as the path). Give a
-    // clear "planned" message instead of a path-not-found error.
+    // `serve` is promoted in the README as a planned command; a user who tries
+    // `atlas serve` lands here (clap parses the word as the path). Give a clear
+    // "planned" message instead of a path-not-found error. (`diff` is a real
+    // command now, routed in `run` before parsing — see ADR 0005.)
     let path_str = cli.path.to_string_lossy();
-    if matches!(path_str.as_ref(), "serve" | "diff") && !cli.path.exists() {
+    if matches!(path_str.as_ref(), "serve") && !cli.path.exists() {
         eprintln!(
             "atlas: '{path_str}' is a planned command, not available yet — \
              see the roadmap: https://github.com/fkenmar/atlas#project-status"
@@ -128,28 +228,7 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         return Err(2);
     }
 
-    let root = cli.path.canonicalize().map_err(|err| {
-        match err.kind() {
-            std::io::ErrorKind::NotFound => eprintln!(
-                "atlas: path not found: {} — atlas maps a directory; pass a repo root, \
-                 or omit the path to map the current folder",
-                cli.path.display()
-            ),
-            std::io::ErrorKind::PermissionDenied => {
-                eprintln!("atlas: permission denied reading {}", cli.path.display())
-            }
-            _ => eprintln!("atlas: cannot open {}: {err}", cli.path.display()),
-        }
-        2
-    })?;
-
-    if !root.is_dir() {
-        eprintln!(
-            "atlas: {} is not a directory — atlas maps a repository root, not a single file",
-            cli.path.display()
-        );
-        return Err(2);
-    }
+    let root = canonicalize_root(&cli.path)?;
 
     let repo_name = root
         .file_name()
@@ -402,5 +481,27 @@ mod tests {
         );
         assert_eq!(parse_langs(None).unwrap(), Vec::<Language>::new());
         assert_eq!(parse_langs(Some("cobol")).err(), Some(2));
+    }
+
+    #[test]
+    fn diff_args_parse_old_and_new() {
+        // argv[0] mirrors the synthetic name the `diff` router passes.
+        let d = DiffArgs::parse_from(["atlas diff", "old", "new"]);
+        assert_eq!(d.old, PathBuf::from("old"));
+        assert_eq!(d.new, PathBuf::from("new"));
+        assert!(!d.no_private);
+        assert_eq!(d.lang, None);
+    }
+
+    #[test]
+    fn diff_args_accept_flags() {
+        let d = DiffArgs::parse_from(["atlas diff", "a", "b", "--lang", "py", "--no-private"]);
+        assert_eq!(d.lang.as_deref(), Some("py"));
+        assert!(d.no_private);
+    }
+
+    #[test]
+    fn diff_requires_two_paths() {
+        assert!(DiffArgs::try_parse_from(["atlas diff", "only-one"]).is_err());
     }
 }

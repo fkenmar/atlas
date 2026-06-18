@@ -114,6 +114,30 @@ host build. **RL** evaluated and parked (ideas.md) — does not fit the structur
 
 Renamed the project to **atlas** end-to-end (crate, binary, map header, CLI messages, cache dir `.repomap`→`.atlas`, ignore file `.atlasignore`) — the binary is now `atlas`, `cargo install --path .` works. Made it usable for a general audience: rewrote README (problem-first, real example output, simple install/usage), added MIT `LICENSE`, added `repository`/`readme`/`keywords`/`categories` to Cargo.toml, added 10 GitHub topics for discoverability. Gate green (68 tests, clippy clean). **80% token-reduction goal paused at the measured ~70%** per maintainer ("stop around 70% for now"); the N≥5 benchmark to confirm the aggregate remains the open decisive measurement when the goal resumes. Local git remote still points at the old `RepoBrain.git` (push works via GitHub redirect; rewrite to `atlas.git` is a one-liner the maintainer can run). A tagged `v0.1.0` GitHub release is the natural next shipping step (gated on the M1 benchmark-win criterion).
 
+## `atlas diff` — structural delta between two trees (2026-06-18, closes #12)
+
+`atlas diff <old> <new>` emits a deterministic structural delta: added/removed
+files, and per common file the added/removed symbols, changed signatures, and
+added/removed import edges. Runs on raw parse output (no rank/budget, so every
+change is reported), not the budgeted map. Design recorded in **ADR 0005**:
+- **Input = two paths** (not git revisions) — the general primitive; compare
+  revisions by materializing them (`git worktree add`). Avoids the `git2` dep gate;
+  a revision shorthand is a deferred follow-up.
+- **CLI = git-style router**, not a clap subcommand — `run()` intercepts `diff`
+  before `Cli::parse()`, so the flat map `Cli` and all its tests stay untouched.
+- New `src/diff.rs` (engine) + `src/render/diff.rs` (Markdown). Symbol identity is
+  `(kind, name)`; overload buckets and kind-changes (free fn → method) fall back to
+  per-signature add/remove.
+No new dependency, no benchmark impact (separate path, never touches rank/budget).
+Hardened by an adversarial review workflow (7 confirmed findings fixed): the diff
+renderer now carries the FR-12 skipped/unwired footer per side (a one-sided
+unparseable file no longer reads as a phantom add/remove); `--no-private` suppresses
+all-private added/removed files (consistent with the changed-file path); path errors
+share the map command's actionable messaging via a `canonicalize_root` helper.
+Gate green: 95 lib tests + a `tests/diff_cli.rs` binary integration suite (4),
+clippy clean. M3 board NOT-YET cell now reads just "Tier 2 grammars" — both XML
+(#11) and diff (#12) have shipped.
+
 ## XML renderer — first M3 deliverable (2026-06-18, closes #11)
 
 `atlas --format xml` now joins md/json — a third output format for
@@ -144,7 +168,7 @@ M3 board cell trimmed to "Tier 2 grammars, atlas diff."
 | ~~Rust grammar (tree-sitter-rust)~~ ✅ done 2026-06-16 | rayon parallel parse (M1) | --watch daemon (M2) |
 | ~~Import linking → index-based graph (ADR 0002)~~ ✅ done 2026-06-16 | clap CLI: --budget/--format/--focus (M1; opens the CI self-map gate) | --focus personalization (M2) |
 | ~~PageRank over the graph~~ ✅ done 2026-06-16 | ~~.gitignore/.repomapignore in discover (FR-7)~~ ✅ done 2026-06-16 | cargo-dist packaging (M2) |
-| ~~tiktoken budgeting + degradation ladder~~ ✅ code done 2026-06-16 (bench owed at integration) | Refine exploration-token metric toward PRD definition (tokens before first correct edit) | Tier 2 grammars, atlas diff (M3) |
+| ~~tiktoken budgeting + degradation ladder~~ ✅ code done 2026-06-16 (bench owed at integration) | Refine exploration-token metric toward PRD definition (tokens before first correct edit) | Tier 2 grammars (M3) |
 | ~~clap CLI + full pipeline wired (discover→…→render)~~ ✅ done 2026-06-16 | | |
 | ~~Exclude inline #[cfg(test)] code from extraction~~ ✅ done 2026-06-16 (self-map: 2036 tok degraded → 1749 tok at FULL detail, 16/16 files) | | |
 | Checkpoint benchmark (pytest with-map vs baseline) ← next | | |

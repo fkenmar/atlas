@@ -1,0 +1,452 @@
+//! Structural diff between two parsed trees (ADR 0005). Reuses the parse
+//! output of both trees and never ranks or budgets, so every changed
+//! declaration is reported. Output is deterministic (NFR-4): all collections
+//! are built from BTreeMap/BTreeSet, so they arrive sorted.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use crate::discover::SourceFile;
+use crate::parse::{ParsedFile, Symbol, Visibility};
+use crate::render::json::kind_name;
+
+/// Options controlling what the diff considers.
+pub struct DiffOptions {
+    /// Drop private symbols from both sides before comparing.
+    pub no_private: bool,
+}
+
+/// A structural delta between two trees: file-level adds/removes and, for files
+/// present in both, the symbol- and import-edge-level changes.
+#[derive(Debug, PartialEq, Eq)]
+pub struct StructuralDiff {
+    pub added_files: Vec<FileSummary>,
+    pub removed_files: Vec<FileSummary>,
+    pub changed_files: Vec<FileDelta>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct FileSummary {
+    pub rel: String,
+    pub lang: &'static str,
+    pub symbol_count: usize,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct FileDelta {
+    pub rel: String,
+    pub added: Vec<SymbolLine>,
+    pub removed: Vec<SymbolLine>,
+    pub changed: Vec<SymbolChange>,
+    pub added_imports: Vec<String>,
+    pub removed_imports: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct SymbolLine {
+    pub kind: &'static str,
+    pub name: String,
+    pub signature: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct SymbolChange {
+    pub kind: &'static str,
+    pub name: String,
+    pub old_signature: String,
+    pub new_signature: String,
+}
+
+impl StructuralDiff {
+    /// True when nothing changed structurally between the two trees.
+    pub fn is_empty(&self) -> bool {
+        self.added_files.is_empty()
+            && self.removed_files.is_empty()
+            && self.changed_files.is_empty()
+    }
+}
+
+/// Compute the structural diff from `old` to `new` (the parse output of each
+/// tree, as returned by [`crate::parse::parse_all`]).
+pub fn diff(
+    old: &[(SourceFile, ParsedFile)],
+    new: &[(SourceFile, ParsedFile)],
+    opts: &DiffOptions,
+) -> StructuralDiff {
+    let old_idx = index(old);
+    let new_idx = index(new);
+
+    let mut added_files = Vec::new();
+    let mut removed_files = Vec::new();
+    let mut changed_files = Vec::new();
+
+    // Removed: present in old, gone in new (BTreeMap iteration → sorted by rel).
+    for (rel, &(lang, pf)) in &old_idx {
+        if !new_idx.contains_key(rel.as_str()) {
+            removed_files.extend(file_summary(rel, lang, pf, opts));
+        }
+    }
+    // Added + changed: walk new (sorted by rel).
+    for (rel, &(lang, new_pf)) in &new_idx {
+        match old_idx.get(rel.as_str()) {
+            None => added_files.extend(file_summary(rel, lang, new_pf, opts)),
+            Some(&(_, old_pf)) => {
+                if let Some(delta) = file_delta(rel, old_pf, new_pf, opts) {
+                    changed_files.push(delta);
+                }
+            }
+        }
+    }
+
+    StructuralDiff {
+        added_files,
+        removed_files,
+        changed_files,
+    }
+}
+
+/// Index a tree's parse output by relative path (sorted, deterministic).
+fn index(files: &[(SourceFile, ParsedFile)]) -> BTreeMap<String, (&'static str, &ParsedFile)> {
+    files
+        .iter()
+        .map(|(sf, pf)| (sf.rel.clone(), (sf.lang.name(), pf)))
+        .collect()
+}
+
+/// Summarize an added/removed file, or `None` when `--no-private` leaves it
+/// with no visible symbols — so it stays consistent with the changed-file path,
+/// which likewise suppresses a file whose only delta is private.
+fn file_summary(
+    rel: &str,
+    lang: &'static str,
+    pf: &ParsedFile,
+    opts: &DiffOptions,
+) -> Option<FileSummary> {
+    let symbol_count = visible(pf, opts).count();
+    if opts.no_private && symbol_count == 0 {
+        return None;
+    }
+    Some(FileSummary {
+        rel: rel.to_string(),
+        lang,
+        symbol_count,
+    })
+}
+
+/// Symbols of `pf` that the diff considers, honoring `--no-private`.
+fn visible<'a>(pf: &'a ParsedFile, opts: &DiffOptions) -> impl Iterator<Item = &'a Symbol> {
+    let no_private = opts.no_private;
+    pf.symbols
+        .iter()
+        .filter(move |s| !no_private || matches!(s.visibility, Visibility::Public))
+}
+
+/// Group a file's visible symbols by `(kind, name)` → its sorted signatures.
+/// Keyed for deterministic iteration; sorting the signatures makes the
+/// set comparison order-independent.
+///
+/// Identity is `(kind, name)` (ADR 0005). A declaration that keeps its name but
+/// changes *kind* — e.g. a Rust free `fn` moved into an `impl` becomes a
+/// `method` — therefore shows as a removed + added pair, not a `~ changed`
+/// line, the same family as the overload fallback. Broadening identity to pair
+/// these is a deferred v2; `kind_change_reports_remove_and_add` pins the
+/// current behavior.
+fn group(pf: &ParsedFile, opts: &DiffOptions) -> BTreeMap<(&'static str, String), Vec<String>> {
+    let mut m: BTreeMap<(&'static str, String), Vec<String>> = BTreeMap::new();
+    for s in visible(pf, opts) {
+        m.entry((kind_name(s.kind), s.name.clone()))
+            .or_default()
+            .push(s.signature.clone());
+    }
+    for sigs in m.values_mut() {
+        sigs.sort();
+    }
+    m
+}
+
+/// Compute one common file's delta, or `None` if nothing changed.
+fn file_delta(
+    rel: &str,
+    old_pf: &ParsedFile,
+    new_pf: &ParsedFile,
+    opts: &DiffOptions,
+) -> Option<FileDelta> {
+    let old_syms = group(old_pf, opts);
+    let new_syms = group(new_pf, opts);
+
+    let mut added = Vec::new();
+    let mut removed = Vec::new();
+    let mut changed = Vec::new();
+
+    let keys: BTreeSet<&(&'static str, String)> = old_syms.keys().chain(new_syms.keys()).collect();
+    for key in keys {
+        let kind = key.0;
+        let name = key.1.as_str();
+        match (old_syms.get(key), new_syms.get(key)) {
+            (None, Some(news)) => removed_or_added(&mut added, kind, name, news),
+            (Some(olds), None) => removed_or_added(&mut removed, kind, name, olds),
+            (Some(olds), Some(news)) => {
+                if olds == news {
+                    // unchanged
+                } else if olds.len() == 1 && news.len() == 1 {
+                    changed.push(SymbolChange {
+                        kind,
+                        name: name.to_string(),
+                        old_signature: olds[0].clone(),
+                        new_signature: news[0].clone(),
+                    });
+                } else {
+                    // Overload bucket: fall back to per-signature add/remove.
+                    let oset: BTreeSet<&String> = olds.iter().collect();
+                    let nset: BTreeSet<&String> = news.iter().collect();
+                    for sig in news.iter().filter(|s| !oset.contains(s)) {
+                        added.push(line(kind, name, sig));
+                    }
+                    for sig in olds.iter().filter(|s| !nset.contains(s)) {
+                        removed.push(line(kind, name, sig));
+                    }
+                }
+            }
+            (None, None) => unreachable!("key came from one of the two maps"),
+        }
+    }
+
+    let old_imp: BTreeSet<&String> = old_pf.imports.iter().collect();
+    let new_imp: BTreeSet<&String> = new_pf.imports.iter().collect();
+    let added_imports: Vec<String> = new_imp
+        .difference(&old_imp)
+        .map(|s| s.to_string())
+        .collect();
+    let removed_imports: Vec<String> = old_imp
+        .difference(&new_imp)
+        .map(|s| s.to_string())
+        .collect();
+
+    if added.is_empty()
+        && removed.is_empty()
+        && changed.is_empty()
+        && added_imports.is_empty()
+        && removed_imports.is_empty()
+    {
+        None
+    } else {
+        Some(FileDelta {
+            rel: rel.to_string(),
+            added,
+            removed,
+            changed,
+            added_imports,
+            removed_imports,
+        })
+    }
+}
+
+fn removed_or_added(dst: &mut Vec<SymbolLine>, kind: &'static str, name: &str, sigs: &[String]) {
+    for sig in sigs {
+        dst.push(line(kind, name, sig));
+    }
+}
+
+fn line(kind: &'static str, name: &str, sig: &str) -> SymbolLine {
+    SymbolLine {
+        kind,
+        name: name.to_string(),
+        signature: sig.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lang::Language;
+    use crate::parse::{ParsedFile, Symbol, SymbolKind, Visibility};
+
+    fn sf(rel: &str, lang: Language) -> SourceFile {
+        SourceFile {
+            path: rel.into(),
+            rel: rel.to_string(),
+            lang,
+        }
+    }
+
+    fn sym(kind: SymbolKind, name: &str, sig: &str, vis: Visibility) -> Symbol {
+        Symbol {
+            name: name.to_string(),
+            kind,
+            signature: sig.to_string(),
+            line: 1,
+            visibility: vis,
+        }
+    }
+
+    fn file(rel: &str, symbols: Vec<Symbol>, imports: Vec<&str>) -> (SourceFile, ParsedFile) {
+        (
+            sf(rel, Language::Python),
+            ParsedFile {
+                symbols,
+                imports: imports.into_iter().map(String::from).collect(),
+                ..Default::default()
+            },
+        )
+    }
+
+    fn pubf(name: &str, sig: &str) -> Symbol {
+        sym(SymbolKind::Function, name, sig, Visibility::Public)
+    }
+
+    #[test]
+    fn added_and_removed_files() {
+        let old = vec![file("a.py", vec![pubf("f", "def f()")], vec![])];
+        let new = vec![file("b.py", vec![pubf("g", "def g()")], vec![])];
+        let d = diff(&old, &new, &DiffOptions { no_private: false });
+        assert_eq!(d.added_files.len(), 1);
+        assert_eq!(d.added_files[0].rel, "b.py");
+        assert_eq!(d.added_files[0].symbol_count, 1);
+        assert_eq!(d.removed_files.len(), 1);
+        assert_eq!(d.removed_files[0].rel, "a.py");
+        assert!(d.changed_files.is_empty());
+    }
+
+    #[test]
+    fn changed_signature_detected() {
+        let old = vec![file("x.py", vec![pubf("f", "def f(x)")], vec![])];
+        let new = vec![file("x.py", vec![pubf("f", "def f(x, y)")], vec![])];
+        let d = diff(&old, &new, &DiffOptions { no_private: false });
+        assert_eq!(d.changed_files.len(), 1);
+        let fd = &d.changed_files[0];
+        assert!(fd.added.is_empty() && fd.removed.is_empty());
+        assert_eq!(fd.changed.len(), 1);
+        assert_eq!(fd.changed[0].name, "f");
+        assert_eq!(fd.changed[0].old_signature, "def f(x)");
+        assert_eq!(fd.changed[0].new_signature, "def f(x, y)");
+    }
+
+    #[test]
+    fn added_and_removed_symbols() {
+        let old = vec![file(
+            "x.py",
+            vec![pubf("f", "def f()"), pubf("g", "def g()")],
+            vec![],
+        )];
+        let new = vec![file(
+            "x.py",
+            vec![pubf("f", "def f()"), pubf("h", "def h()")],
+            vec![],
+        )];
+        let d = diff(&old, &new, &DiffOptions { no_private: false });
+        assert_eq!(d.changed_files.len(), 1);
+        let fd = &d.changed_files[0];
+        assert_eq!(
+            fd.added.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            vec!["h"]
+        );
+        assert_eq!(
+            fd.removed
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["g"]
+        );
+        assert!(fd.changed.is_empty());
+    }
+
+    #[test]
+    fn import_edges_diff_sorted() {
+        let old = vec![file("x.py", vec![pubf("f", "def f()")], vec!["a", "b"])];
+        let new = vec![file("x.py", vec![pubf("f", "def f()")], vec!["b", "c"])];
+        let d = diff(&old, &new, &DiffOptions { no_private: false });
+        assert_eq!(d.changed_files.len(), 1);
+        let fd = &d.changed_files[0];
+        assert_eq!(fd.added_imports, vec!["c".to_string()]);
+        assert_eq!(fd.removed_imports, vec!["a".to_string()]);
+    }
+
+    #[test]
+    fn no_private_filters_symbols() {
+        let old = vec![file("x.py", vec![pubf("f", "def f()")], vec![])];
+        let new = vec![file(
+            "x.py",
+            vec![
+                pubf("f", "def f()"),
+                sym(SymbolKind::Function, "h", "def h()", Visibility::Private),
+            ],
+            vec![],
+        )];
+        // With no_private, the new private `h` is invisible → no change at all.
+        let hidden = diff(&old, &new, &DiffOptions { no_private: true });
+        assert!(hidden.is_empty());
+        // Without it, `h` shows as an added symbol.
+        let shown = diff(&old, &new, &DiffOptions { no_private: false });
+        assert_eq!(shown.changed_files.len(), 1);
+        assert_eq!(shown.changed_files[0].added.len(), 1);
+    }
+
+    #[test]
+    fn kind_change_reports_remove_and_add() {
+        // A symbol that keeps its name but changes kind (free fn → method) is a
+        // remove + add pair, not a "changed" line — the (kind, name) identity
+        // documented in ADR 0005. This test pins that behavior as intentional.
+        let old = vec![file("x.py", vec![pubf("helper", "def helper()")], vec![])];
+        let new = vec![file(
+            "x.py",
+            vec![sym(
+                SymbolKind::Method,
+                "helper",
+                "def helper(self)",
+                Visibility::Public,
+            )],
+            vec![],
+        )];
+        let d = diff(&old, &new, &DiffOptions { no_private: false });
+        assert_eq!(d.changed_files.len(), 1);
+        let fd = &d.changed_files[0];
+        assert!(fd.changed.is_empty());
+        assert_eq!(fd.added.len(), 1);
+        assert_eq!(fd.added[0].kind, "method");
+        assert_eq!(fd.removed.len(), 1);
+        assert_eq!(fd.removed[0].kind, "function");
+    }
+
+    #[test]
+    fn no_private_hides_all_private_added_file() {
+        let old: Vec<(SourceFile, ParsedFile)> = vec![];
+        let new = vec![file(
+            "secret.py",
+            vec![sym(
+                SymbolKind::Function,
+                "_helper",
+                "def _helper()",
+                Visibility::Private,
+            )],
+            vec![],
+        )];
+        // Under --no-private the all-private added file has no public surface to
+        // report, so it is suppressed (consistent with the changed-file path).
+        assert!(diff(&old, &new, &DiffOptions { no_private: true }).is_empty());
+        // Without the flag it is reported, its private symbol counted.
+        let shown = diff(&old, &new, &DiffOptions { no_private: false });
+        assert_eq!(shown.added_files.len(), 1);
+        assert_eq!(shown.added_files[0].rel, "secret.py");
+        assert_eq!(shown.added_files[0].symbol_count, 1);
+    }
+
+    #[test]
+    fn identical_trees_yield_empty_diff() {
+        let tree = vec![file("x.py", vec![pubf("f", "def f()")], vec!["a"])];
+        let d = diff(&tree, &tree, &DiffOptions { no_private: false });
+        assert!(d.is_empty());
+    }
+
+    #[test]
+    fn is_deterministic() {
+        let old = vec![
+            file("b.py", vec![pubf("f", "def f()")], vec![]),
+            file("a.py", vec![pubf("g", "def g(x)")], vec![]),
+        ];
+        let new = vec![
+            file("a.py", vec![pubf("g", "def g(x, y)")], vec![]),
+            file("c.py", vec![pubf("h", "def h()")], vec![]),
+        ];
+        let opts = DiffOptions { no_private: false };
+        assert_eq!(diff(&old, &new, &opts), diff(&old, &new, &opts));
+    }
+}

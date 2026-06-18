@@ -9,6 +9,7 @@
 pub mod budget;
 pub mod cache;
 pub mod cli;
+pub mod diff;
 pub mod discover;
 pub mod lang;
 pub mod link;

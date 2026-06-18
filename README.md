@@ -108,6 +108,7 @@ atlas . --lang py,rs             # only these languages
 atlas . --no-private             # public API surface only
 atlas . --format json            # JSON instead of Markdown
 atlas . --format xml             # XML, for wrapping in a Claude prompt
+atlas diff old/ new/             # structural delta between two trees (added/removed/changed)
 atlas . --color always           # force ANSI color (auto-detects a terminal otherwise)
 ```
 
@@ -184,7 +185,9 @@ It reads your repo with [tree-sitter](https://tree-sitter.github.io/tree-sitter/
 
 Alpha. The core works end-to-end and is benchmark-tested, but the CLI and output format may still change — pin a version if you depend on the output. See [STATUS.md](STATUS.md) for the current state, [CHANGELOG.md](CHANGELOG.md) for what's landed, and [docs/PRD.md](docs/PRD.md) for the full design.
 
-Coming next: an MCP server so agents can query the map directly (`atlas serve --mcp`), and an API-surface diff between revisions (`atlas diff HEAD~5`).
+`atlas diff <old> <new>` shows the structural delta between two trees — added/removed/changed signatures and import edges — so an agent sees what moved without re-reading the tree. To compare git revisions today, materialize them first (e.g. `git worktree add`); a `atlas diff HEAD~5` shorthand is on the roadmap.
+
+Coming next: an MCP server so agents can query the map directly (`atlas serve --mcp`).
 
 ---
 
