@@ -175,8 +175,8 @@ atlas . --focus src/auth --focus src/api > atlas-map.md
 
 Agent documentation entry points live in [`llms.txt`](llms.txt) and
 [`llms-full.txt`](llms-full.txt). They point agents at the README, benchmark
-history, comparison guide, security policy, PRD, changelog, and MCP setup docs
-without turning the README into a doc index.
+history, [comparison guide](docs/comparison.md), [security policy](SECURITY.md),
+PRD, changelog, and MCP setup docs without turning the README into a doc index.
 
 For Claude Code and other MCP-compatible clients, see
 [`docs/CLAUDE_CODE_MCP.md`](docs/CLAUDE_CODE_MCP.md) and the reusable
@@ -196,6 +196,10 @@ discover → parse → link → rank → budget → render
 ```
 
 It reads your repo with [tree-sitter](https://tree-sitter.github.io/tree-sitter/), respects `.gitignore` (and `.atlasignore`), and caches parse results so re-runs are fast.
+
+For a factual comparison against Aider repo-map, ctags, tree-sitter CLI,
+Sourcegraph/SCIP, and concat-style repo packers, see
+[`docs/comparison.md`](docs/comparison.md).
 
 ---
 

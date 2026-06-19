@@ -47,6 +47,21 @@ The matching reusable example is
 If your client starts servers from a different working directory, replace `.`
 with the absolute repository root.
 
+## When to use MCP
+
+Use MCP when the client can call tools during a session and you want a fresh map
+on demand, especially after edits or when the user changes focus. Keep the plain
+CLI path when you just need to paste or attach one map:
+
+```sh
+atlas . --for-agent -o atlas-map.md
+```
+
+Committing `atlas-map.md` can still be useful for repos where every contributor
+should start with the same orientation. MCP is the integration layer; the CLI is
+the stable core, and any future Claude/plugin packaging should wrap the CLI/MCP
+surface rather than replace it.
+
 ## Tools
 
 `get_map` arguments:
@@ -66,6 +81,19 @@ with the absolute repository root.
 - `no_private`: public API surface only. Optional.
 - `lang`: extension filter. Optional.
 
+## Smoke test prompt
+
+After adding the server to your client, ask:
+
+```text
+Use the atlas MCP server to get a 1200-token map for this repository, then tell
+me which files define the CLI entry point and MCP tools. Do not open source
+files until after you have read the map.
+```
+
+A healthy setup should call `get_map`, return Markdown by default, and mention
+`src/cli.rs` plus `src/mcp.rs` before deeper source inspection.
+
 ## Suggested agent behavior
 
 - Call `get_map` before broad repo exploration.
@@ -81,3 +109,7 @@ with the absolute repository root.
   excluded by `.gitignore` or `.atlasignore`.
 - If the client cannot find `atlas`, use an absolute `command` path in the MCP
   config.
+- If the server starts but tools are missing, restart the client after editing
+  its MCP config; many clients read the config only at startup.
+- If a request hangs, run `atlas . --budget 600` in the same directory. If the
+  CLI fails there too, fix the repo/path issue before debugging MCP.

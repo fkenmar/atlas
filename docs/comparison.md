@@ -23,6 +23,18 @@ or editor integration.
 | Sourcegraph / SCIP / LSPs | Deep code intelligence, search, and navigation | atlas deliberately avoids server infrastructure and semantic analysis. |
 | `find` / `tree` / `cat` | Raw file discovery and source inspection | atlas helps decide what to inspect first; source remains the truth before editing. |
 
+## Decision matrix
+
+| Dimension | atlas | Aider repo-map | ctags | tree-sitter CLI | Sourcegraph / SCIP | Concat / Repomix-style packers |
+|---|---|---|---|---|---|---|
+| Standalone CLI | Yes | No, embedded in Aider | Yes | Yes | Usually server/toolchain | Yes |
+| Structural graph | Imports and reverse dependencies | Yes, inside Aider | No | No | Yes | No |
+| Ranking | PageRank-style file importance plus focus boosts | Yes | No | No | Search/index ranking, not a small prompt map | Usually file order/filter order |
+| Token budgeting | Fixed budget with graceful degradation | Yes, Aider-specific | No | No | Not the core workflow | Usually size limits or manual filters |
+| Output formats | Markdown, JSON, XML | Aider internal prompt format | Tags text | AST/query output | APIs/UI indexes | Text/XML/Markdown bundles vary by tool |
+| Install friction | Single binary, pipx/PyPI wrapper, release archives | Install Aider/Python app | Native packages common | Native binary | Service/index setup | Usually npm/Python/CLI |
+| Agent integration | Any agent via file/pipe; MCP stdio server | Aider only | Manual prompt glue | Manual prompt glue | API/editor integration | Any agent via attached text |
+
 ## Claims that are safe today
 
 - atlas runs locally, offline, and has no product telemetry.
