@@ -103,7 +103,8 @@ Small high-impact fixes become release candidates.
 
 ## Seven-day public metrics checklist
 
-No product telemetry. Use public-source metrics only.
+No product telemetry. Use public-source metrics only; the maintained collection
+guide is [docs/ADOPTION_METRICS.md](ADOPTION_METRICS.md).
 
 Day 0:
 

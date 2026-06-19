@@ -97,6 +97,9 @@ atlas .
 
 You should see a `# atlas: …` header followed by a list of ranked files. That's the whole tool.
 
+atlas runs locally and does not collect telemetry; see
+[`docs/PRIVACY.md`](docs/PRIVACY.md) for the offline/privacy model.
+
 ---
 
 ## Use
@@ -207,7 +210,7 @@ Sourcegraph/SCIP, and concat-style repo packers, see
 
 - **Empty map / "0 files".** atlas found no supported source under that path. Check the language is one it maps (Python, TS/JS, Rust, Go, Java, C/C++) and that you're pointing at the project root — not a single file, and not a vendored or ignored directory. The error includes the top file extensions atlas saw to make wrong-root or unsupported-language cases easier to spot.
 - **`command not found: atlas`.** `~/.cargo/bin` isn't on your `PATH`. Add it (rustup's installer normally does), or run the binary by its full path.
-- **A symbol is wrong or missing.** That's usually a tree-sitter extraction bug — please [open an issue](https://github.com/fkenmar/atlas/issues/new?template=bug_report.md) with a minimal snippet that reproduces it.
+- **A symbol is wrong or missing.** That's usually a tree-sitter extraction bug — please [open an issue](https://github.com/fkenmar/atlas/issues/new?template=extraction_bug.md) with a minimal snippet that reproduces it.
 
 ---
 
