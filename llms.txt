@@ -19,6 +19,9 @@ function bodies in normal map output.
 - [Comparison guide](docs/comparison.md): positioning against adjacent tools.
 - [Claude Code MCP setup](docs/CLAUDE_CODE_MCP.md): using `atlas serve --mcp`.
 - [Security policy](SECURITY.md): supported versions and disclosure path.
+- [Privacy model](docs/PRIVACY.md): local operation, cache, and map sensitivity.
+- [Adoption metrics](docs/ADOPTION_METRICS.md): public-source metrics without
+  product telemetry.
 
 ## Common commands
 

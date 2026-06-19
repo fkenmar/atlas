@@ -8,6 +8,9 @@ metadata, trust files, preview assets, and claims in sync.
 - [ ] `cargo fmt --all`
 - [ ] `cargo clippy --all-targets -- -D warnings`
 - [ ] `cargo test`
+- [ ] Confirm the privacy model still matches
+      [docs/PRIVACY.md](PRIVACY.md): local operation, no telemetry, cache only
+      under `.atlas/`.
 - [ ] Confirm README install commands match the release tag.
 - [ ] Confirm `CHANGELOG.md` has the release notes.
 - [ ] Confirm benchmark wording matches `benchmark/history.md`.
@@ -118,3 +121,10 @@ new score in the launch issue or release checklist.
       cadence documented.
 - [ ] #119: outreach list, channel copy, objection tracking, and 7-day metrics
       checklist exist.
+
+## Public metrics retro
+
+- [ ] Use [docs/ADOPTION_METRICS.md](ADOPTION_METRICS.md) for Day 0 / Day 7
+      public-source metrics.
+- [ ] Do not add runtime analytics or client-side tracking to answer launch
+      questions.
