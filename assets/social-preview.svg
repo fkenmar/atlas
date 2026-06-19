@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" fill="none" role="img" aria-label="atlas social preview">
+  <title>atlas social preview</title>
+  <rect width="1280" height="640" fill="#111827"/>
+  <rect x="56" y="56" width="1168" height="528" rx="36" fill="#F8FAFC"/>
+  <circle cx="182" cy="162" r="58" fill="#584EEB"/>
+  <g stroke="#FFFFFF" stroke-width="5" stroke-linecap="round">
+    <path d="M182 162 L182 128"/>
+    <path d="M182 162 L212 145"/>
+    <path d="M182 162 L212 179"/>
+    <path d="M182 162 L182 196"/>
+    <path d="M182 162 L152 179"/>
+    <path d="M182 162 L152 145"/>
+  </g>
+  <g fill="#FFFFFF">
+    <circle cx="182" cy="128" r="8"/>
+    <circle cx="212" cy="145" r="8"/>
+    <circle cx="212" cy="179" r="8"/>
+    <circle cx="182" cy="196" r="8"/>
+    <circle cx="152" cy="179" r="8"/>
+    <circle cx="152" cy="145" r="8"/>
+    <circle cx="182" cy="162" r="13"/>
+  </g>
+  <circle cx="182" cy="162" r="6" fill="#FBBF24"/>
+
+  <text x="278" y="162" fill="#111827" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="88" font-weight="800">atlas</text>
+  <text x="278" y="230" fill="#475569" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="36" font-weight="600">Fast Rust repo maps for AI coding agents</text>
+
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="29" font-weight="700">
+    <rect x="114" y="318" width="234" height="62" rx="18" fill="#EEF2FF"/>
+    <text x="142" y="358" fill="#3730A3">signatures</text>
+    <rect x="382" y="318" width="174" height="62" rx="18" fill="#ECFDF5"/>
+    <text x="410" y="358" fill="#047857">imports</text>
+    <rect x="590" y="318" width="148" height="62" rx="18" fill="#FFFBEB"/>
+    <text x="618" y="358" fill="#B45309">diff</text>
+    <rect x="772" y="318" width="148" height="62" rx="18" fill="#FDF2F8"/>
+    <text x="800" y="358" fill="#BE185D">MCP</text>
+    <rect x="954" y="318" width="214" height="62" rx="18" fill="#EFF6FF"/>
+    <text x="982" y="358" fill="#1D4ED8">token budget</text>
+  </g>
+
+  <text x="114" y="482" fill="#111827" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="31" font-weight="700">atlas . --for-agent -o atlas-map.md</text>
+  <text x="114" y="530" fill="#64748B" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="26" font-weight="600">github.com/fkenmar/atlas</text>
+</svg>

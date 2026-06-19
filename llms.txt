@@ -1,0 +1,49 @@
+# atlas
+
+> Fast Rust CLI that compiles a codebase into a token-budgeted structural map
+> for AI coding agents.
+
+atlas is a local, read-only repo map generator. It walks a codebase, extracts
+signatures, types, imports, and reverse dependencies, ranks files by graph
+centrality, and fits the result into a chosen token budget. It never includes
+function bodies in normal map output.
+
+## Primary docs
+
+- [README](README.md): install, first run, CLI usage, agent workflows.
+- [Full agent index](llms-full.txt): expanded documentation map for agents.
+- [PRD](docs/PRD.md): product scope, requirements, risks, and non-goals.
+- [Changelog](CHANGELOG.md): user-facing changes by release.
+- [Benchmark protocol](benchmark/README.md) and [history](benchmark/history.md):
+  what benchmark claims are supported.
+- [Comparison guide](docs/comparison.md): positioning against adjacent tools.
+- [Claude Code MCP setup](docs/CLAUDE_CODE_MCP.md): using `atlas serve --mcp`.
+- [Security policy](SECURITY.md): supported versions and disclosure path.
+
+## Common commands
+
+```sh
+atlas . --budget 2048
+atlas . --focus src/auth --focus src/api
+atlas . --format json
+atlas . --format xml
+atlas . --for-agent -o atlas-map.md
+atlas diff HEAD~1 HEAD
+atlas serve --mcp --root .
+```
+
+## Positioning
+
+Use atlas when an agent needs a compact navigation index, not a full source
+dump. It is structural rather than semantic: parser-grade signatures, types,
+file imports, reverse dependencies, and a collapsed-symbol index under budget.
+It complements grep, source reading, and tests; it does not replace them.
+
+## Safety notes for agents
+
+- Treat atlas output as an index, not source of truth for implementation.
+- Open source files before editing behavior.
+- Do not infer private logic from signatures alone.
+- The tool runs offline, makes no network calls, and has no product telemetry.
+- For MCP usage, confine the server with `--root` and request paths under that
+  root.

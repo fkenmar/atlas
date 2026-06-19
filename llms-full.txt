@@ -1,0 +1,131 @@
+# atlas agent documentation index
+
+This file is the expanded `llms.txt` companion for agents that want more context
+without crawling every repository file. Prefer the linked source documents when
+exact details matter.
+
+## What atlas is
+
+atlas is a standalone Rust CLI that turns a repository into a compact structural
+map for AI coding agents. The map includes signatures, types, imports, reverse
+dependencies, file ranks, and optional JSON/XML structure. It excludes function
+bodies so the output stays small enough to fit in an agent context window.
+
+Core pipeline:
+
+```text
+discover -> parse -> link -> rank -> budget -> render
+```
+
+Supported languages today: Python, TypeScript/JavaScript, Rust, Go, Java, C,
+and C++.
+
+## Start here
+
+- [README](README.md): installation, quickstart, examples, troubleshooting.
+- [CONTRIBUTING](CONTRIBUTING.md): local build/test commands and contribution
+  expectations.
+- [CLAUDE](CLAUDE.md): maintainer workflow rules for agents working in this
+  repository.
+- [STATUS](STATUS.md): current milestone notes and completed work.
+- [CHANGELOG](CHANGELOG.md): public release notes and unreleased changes.
+
+## Product and architecture
+
+- [PRD](docs/PRD.md): target users, non-goals, functional requirements,
+  success metrics, risks.
+- [ADR 0002](docs/adr/0002-index-based-graph.md): index-based graph model.
+- [ADR 0003](docs/adr/0003-budget-packing-ladder.md): budget degradation
+  ladder.
+- [ADR 0004](docs/adr/0004-symbol-index-for-collapsed-tail.md): collapsed-tail
+  symbol index.
+- [ADR 0005](docs/adr/0005-structural-diff-between-trees.md): structural diff
+  design.
+- [ADR 0008](docs/adr/0008-mcp-server-over-stdio.md): MCP server over stdio.
+
+## Agent workflows
+
+Generate a Markdown map:
+
+```sh
+atlas . --budget 2048
+```
+
+Save a map with an agent preamble:
+
+```sh
+atlas . --for-agent -o atlas-map.md
+```
+
+Focus the map on the area being changed:
+
+```sh
+atlas . --focus src/api --focus tests
+```
+
+Use structured output:
+
+```sh
+atlas . --format json
+atlas . --format xml
+```
+
+Review structural change between revisions:
+
+```sh
+atlas diff HEAD~1 HEAD
+atlas diff main . --no-private --exit-code
+```
+
+Run the MCP server for compatible clients:
+
+```sh
+atlas serve --mcp --root .
+```
+
+See [Claude Code MCP setup](docs/CLAUDE_CODE_MCP.md) and
+[examples/claude-code.mcp.json](examples/claude-code.mcp.json).
+
+## Benchmarks and claim hygiene
+
+The safest public benchmark claim is from the comprehension benchmark in
+[benchmark/history](benchmark/history.md): the default map achieved 20/20
+accuracy in both arms while reducing median tokens from 85,670 to 29,781
+(-65.2%) and median turns from 3 to 1 on the constrained read-only task suite.
+
+Do not claim a broad edit-task token reduction. The edit-task benchmark is
+valuable for characterizing behavior, but the recorded runs are too noisy for a
+headline token claim. If you mention edit tasks, say that atlas tends to reduce
+turns and helps "find the existing thing" tasks, while token deltas remain
+inconclusive until the suite is larger and lower variance.
+
+## Positioning
+
+atlas is not a full-repo concatenator, semantic code search engine, LSP, editor,
+or code generator. It is a compact structural index that makes an agent's first
+navigation pass cheaper and more grounded.
+
+Adjacent-tool framing:
+
+- Versus full source dumps: atlas preserves navigation signal under a fixed
+  token budget and omits implementation bodies.
+- Versus ctags/tree-sitter raw output: atlas ranks and budgets the structure for
+  LLM consumption.
+- Versus Aider repo-map: atlas is standalone, Rust-native, CLI/MCP-oriented, and
+  usable with any agent.
+- Versus prompt packers: atlas focuses on structural signal, not collecting
+  arbitrary file contents.
+
+See [docs/comparison.md](docs/comparison.md).
+
+## Safety and operations
+
+- [SECURITY.md](SECURITY.md): disclosure path and supported versions.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): contributor conduct expectations.
+- [docs/launch-checklist.md](docs/launch-checklist.md): release, metadata, and
+  community-profile checks.
+- [docs/post-launch-outreach.md](docs/post-launch-outreach.md): channel-specific
+  launch copy and public-source follow-up metrics.
+
+atlas is local-first and read-only in normal use. The MCP server also uses
+read-only parsing and rejects paths outside its configured `--root`.
