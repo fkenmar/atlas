@@ -34,7 +34,12 @@ In scope:
 - MCP `--root` confinement bypasses.
 - Crashes or unbounded resource use on ordinary source input.
 - Malformed JSON/XML output that can break downstream parsers.
-- Supply-chain or release-artifact concerns.
+- Binary distribution, installer-script, PyPI wheel, and GitHub release artifact
+  concerns.
+- GitHub Actions workflow issues that could publish the wrong artifact or expose
+  release credentials.
+- Local code parsing issues that can read, write, or execute beyond the
+  requested repository map operation.
 
 Out of scope:
 

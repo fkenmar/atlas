@@ -122,7 +122,7 @@ See [docs/comparison.md](docs/comparison.md).
 
 - [SECURITY.md](SECURITY.md): disclosure path and supported versions.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): contributor conduct expectations.
-- [docs/launch-checklist.md](docs/launch-checklist.md): release, metadata, and
+- [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md): release, metadata, and
   community-profile checks.
 - [docs/post-launch-outreach.md](docs/post-launch-outreach.md): channel-specific
   launch copy and public-source follow-up metrics.
