@@ -18,6 +18,7 @@
   <a href="#install"><b>Install</b></a> ·
   <a href="#use"><b>Use</b></a> ·
   <a href="#use-it-with-your-ai-agent"><b>Use it with your agent</b></a> ·
+  <a href="#docs-for-agents"><b>Docs for agents</b></a> ·
   <a href="#why-it-works"><b>Why it works</b></a> ·
   <a href="#troubleshooting"><b>Troubleshooting</b></a>
 </sub>
@@ -167,6 +168,19 @@ atlas . --focus src/auth --focus src/api > atlas-map.md
 **Keep it in the repo** so every contributor and agent starts oriented — commit `atlas-map.md` and regenerate it in a pre-commit hook or CI.
 
 > Experimental on `dev`: `atlas serve --mcp` exposes a `get_map` tool over stdio JSON-RPC/MCP so compatible agents can pull a fresh map directly.
+
+---
+
+## Docs for agents
+
+Agent documentation entry points live in [`llms.txt`](llms.txt) and
+[`llms-full.txt`](llms-full.txt). They point agents at the README, benchmark
+history, comparison guide, security policy, PRD, changelog, and MCP setup docs
+without turning the README into a doc index.
+
+For Claude Code and other MCP-compatible clients, see
+[`docs/CLAUDE_CODE_MCP.md`](docs/CLAUDE_CODE_MCP.md) and the reusable
+[`examples/claude-code.mcp.json`](examples/claude-code.mcp.json) config.
 
 ---
 
