@@ -264,7 +264,12 @@ More answers in the [FAQ](docs/FAQ.md).
 
 ## Project status
 
-Alpha. The core works end-to-end and is benchmark-tested, but the CLI and output format may still change — pin a version if you depend on the output. See [STATUS.md](STATUS.md) for the current state, [CHANGELOG.md](CHANGELOG.md) for what's landed, and [docs/PRD.md](docs/PRD.md) for the full design.
+Current release channel: **alpha**. The core works end-to-end and is
+benchmark-tested, but CLI flags, output shape, install paths, and docs may still
+change. Pin a version if you depend on the output. See
+[release readiness gates](docs/release-readiness.md) for the alpha/beta/stable
+criteria, [STATUS.md](STATUS.md) for current state, [CHANGELOG.md](CHANGELOG.md)
+for what's landed, and [docs/PRD.md](docs/PRD.md) for the full design.
 
 `atlas diff <old> <new>` shows the structural delta between two trees — added/removed/changed signatures and import edges — so an agent sees what moved without re-reading the tree. Each side is a directory **or a git revision** (`atlas diff HEAD~1 HEAD`, `atlas diff v0.2.0 .`); revisions are checked out via `git` under the hood (no extra setup). Markdown by default; `--format json` or `xml` for tooling and CI.
 

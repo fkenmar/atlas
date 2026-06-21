@@ -100,10 +100,14 @@ change awaiting the artifact-naming decision.
 
 ## Pre-release checklist
 
-The full gate lives in [`LAUNCH_CHECKLIST.md`](LAUNCH_CHECKLIST.md). The
+Pick the intended channel first: alpha, beta, or stable. The channel gates live
+in [`release-readiness.md`](release-readiness.md), and the full launch gate lives
+in [`LAUNCH_CHECKLIST.md`](LAUNCH_CHECKLIST.md). The
 essentials:
 
 - `cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test` green.
+- The selected channel's readiness gate is true, or any waived blocker is called
+  out in `CHANGELOG.md` and the release notes.
 - README install commands and badges match the new tag.
 - `CHANGELOG.md` has the section, value-first, with honest benchmark wording.
 - Alpha/stability note present for pre-1.0 tags (dist marks `-alpha`/`-prerelease`

@@ -76,7 +76,8 @@ are skipped and counted, never fatal.
 
 It's **alpha**. The core works end-to-end and is benchmark-tested, but the CLI
 and output format may still change — pin a version if you depend on the output.
-See [STATUS.md](../STATUS.md) and [CHANGELOG.md](../CHANGELOG.md).
+See [release readiness gates](release-readiness.md), [STATUS.md](../STATUS.md),
+and [CHANGELOG.md](../CHANGELOG.md).
 
 ## What are the actual benchmark numbers?
 
