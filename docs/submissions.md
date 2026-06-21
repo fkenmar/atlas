@@ -66,17 +66,53 @@ Most use a bullet `- [name](url) - description.` under a category. atlas fits
 if the list doesn't use them.) MCP setup lives in
 [`CLAUDE_CODE_MCP.md`](CLAUDE_CODE_MCP.md); the server is `atlas serve --mcp`.
 
-### Official MCP registry / `modelcontextprotocol` server directory
+### Official MCP registry (`modelcontextprotocol/registry`)
 
-Follow the registry's submission format (usually a JSON entry or a PR adding the
-server). Key fields:
+The registry takes a `server.json` published with the `mcp-publisher` CLI
+(GitHub-auth proves you own `io.github.fkenmar/*`). Server facts, verified
+against `src/mcp.rs`: server name `atlas`, transport **stdio**, tools
+**`get_map`** and **`get_symbol`**, launched with `atlas serve --mcp --root .`.
 
-- **name:** `atlas`
-- **description:** the *medium* blurb above.
-- **repository:** `https://github.com/fkenmar/atlas`
-- **transport:** stdio
-- **command:** `atlas serve --mcp --root .`
-- **tools:** `get_map`, `get_symbol`
+Starting `server.json` (schema current as of 2025-12-11 — re-check the
+`$schema` URL and validate with `mcp-publisher validate` before publishing):
+
+```json
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.fkenmar/atlas",
+  "title": "atlas",
+  "description": "Token-budgeted structural map of a repo for AI coding agents — ranked signatures, types, and imports, no bodies. Read-only.",
+  "repository": { "url": "https://github.com/fkenmar/atlas", "source": "github" },
+  "version": "0.2.1-alpha",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "atlas-map",
+      "version": "PUT-EXACT-PYPI-VERSION-HERE",
+      "transport": { "type": "stdio" },
+      "runtimeHint": "uvx"
+    }
+  ]
+}
+```
+
+**Before publishing, confirm two things** (the registry validates the package
+exists and runs):
+
+1. **Exact PyPI version string.** `0.2.1-alpha` is normalized by PyPI (likely
+   `0.2.1a0`). Use the literal version shown on the
+   [PyPI page](https://pypi.org/project/atlas-map/) for `packages[].version`.
+2. **Entry-point launch.** The wheel installs the `atlas` command, not
+   `atlas-map`, so a generic `uvx atlas-map` won't start the server. The real
+   invocation is `uvx --from atlas-map atlas serve --mcp --root .`. Encode that
+   with `packageArguments` (see the registry's server-json reference for the
+   `--from`/subcommand pattern), or wait until atlas is on crates.io (#37) and
+   publish a `registryType: "cargo"` package instead, which maps more cleanly to
+   a single binary.
+
+The local client config (`examples/claude-code.mcp.json`) already works today
+regardless of registry status.
 
 ### MCP directories (Glama, Smithery, PulseMCP, etc.)
 
