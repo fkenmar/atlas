@@ -4,7 +4,7 @@
 
 # atlas
 
-**Turn any codebase into a compact map your AI coding agent can read in one shot — so it stops burning tokens exploring.**
+**Same answers, ~65% fewer tokens.** atlas compiles your repo into a compact, ranked map your AI coding agent reads in one shot — so it stops burning context just to find its way around.
 
 <p>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-4F46E5?style=flat-square" alt="License: MIT"></a>
@@ -36,7 +36,7 @@
 
 When an AI coding agent works in your repo, it spends most of its effort just figuring out where things are: opening file after file to learn the layout. **atlas** does that once and hands the agent a single ~2,000-token map — every function signature, type, and import, ranked by importance, with no function bodies. The agent gets its bearings immediately and gets to work. It's the idea behind aider's repo map, unbundled into a standalone tool you can point at any agent.
 
-In our benchmark, agents given an atlas map answered structural questions about a codebase using **~65% fewer tokens at identical accuracy** (20/20 correct *with* and *without* the map) — typically resolving in a **single turn instead of three**. On open-ended edit tasks the map cuts turns too, though token savings there vary by task.
+In our benchmark, agents given an atlas map answered structural questions about a codebase using **~65% fewer tokens at identical accuracy** (20/20 correct *with* and *without* the map — 85,670 → 29,781 tokens) — typically resolving in a **single turn instead of three**. On open-ended edit tasks the map cuts turns too, though token savings there vary by task. These are numbers you can [reproduce yourself](benchmark/README.md#reproduce-the-headline-number) — the harness and the 20 verified questions are in the repo.
 
 ## What it looks like
 

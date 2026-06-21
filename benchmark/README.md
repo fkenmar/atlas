@@ -1,6 +1,37 @@
-# repomap agent-task benchmark
+# atlas agent-task benchmark
 
-The arbiter of every ranking/budgeting change (PRD §8): does a repomap in context actually reduce agent exploration? If a change doesn't move these numbers, it doesn't ship as an improvement.
+The arbiter of every ranking/budgeting change (PRD §8): does an atlas map in context actually reduce agent exploration? If a change doesn't move these numbers, it doesn't ship as an improvement.
+
+## Reproduce the headline number
+
+The README's claim — **~65% fewer tokens at identical accuracy** — is the
+comprehension benchmark, and you can run it yourself. It's the trustworthy,
+low-variance signal atlas stands behind (edit-task token deltas are too noisy to
+headline — see the variance section below).
+
+```sh
+cargo build --release          # builds target/release/atlas (the with-map arm)
+./benchmark/comprehension.sh   # 20 verified questions, both arms, read-only
+```
+
+Requirements: the `claude` CLI (logged in), `git`, `jq`, and `python3` with
+PyYAML. Knobs: `BENCH_MODEL` (default `claude-sonnet-4-6`), `BENCH_QLIMIT=N` for a
+quick smoke run, `ATLAS_BIN` to point at a different binary.
+
+**What you should see** (the recorded run, `results/comprehension-20260617-084740`):
+
+| Arm         | Accuracy | Median tokens | Median turns |
+| ----------- | -------- | ------------- | ------------ |
+| without map | 20/20    | 85,670        | 3            |
+| with map    | 20/20    | 29,781        | 1            |
+
+Same accuracy, **−65.2% tokens**, 3 → 1 turns, at the shipped default 2,048-token
+budget. The questions ("which class is the central config object?", "name the
+path-normalization helper") and answer keys live in
+[`comprehension/`](comprehension/), each verified against the pinned clone before
+commit. The run is a live agent against a real repo, so exact tokens vary
+slightly run to run — but comprehension is constrained and stable (unlike the
+60–140% swings on edit tasks), which is why this is the number we publish.
 
 ## What it measures
 
