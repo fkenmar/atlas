@@ -203,7 +203,41 @@ the NOT-YET board.**
 (A billed N=5 agent-task benchmark run #1/#14 was authorized and dispatched but
 did not finish before a session limit — re-run when convenient.)
 
+## Progressive disclosure + distribution + tooling — 2026-06-21
+
+**Shipped to `main` (green, 207 lib tests):**
+- **Progressive disclosure (#129, ADR 0009).** Thin symbol-index render + stable
+  `relpath#name[@line]` anchors; MCP `get_symbol_index` (budgeted anchor index) +
+  `expand_symbol` (anchor → signature + one-hop file neighbors — structural only, no
+  call graph). The agent front-loads a thin index and expands on demand, attacking
+  context-window *occupancy* — the cost prompt caching can't touch (a deep-research
+  pass confirmed a budgeted map in the cache-stable prefix already re-reads at ~10%
+  of input cost, so occupancy/recall, not re-read billing, is the real lever).
+- **`atlas --check <FILE>`** — regenerate-and-compare staleness gate (exit 0/1/2) for
+  CI / pre-commit gating of a committed map; mutually exclusive with `-o`. Documented
+  in README + docs/pre-commit.md + docs/ci-recipes.md.
+- **GitHub Pages landing page (#130)** at `docs/index.html` (the `/docs` Pages source).
+  ⚠ Enable *Settings → Pages → /docs* to publish it.
+
+**Open PRs (review/merge):** #133 README benchmark table · #134 README comparison
+matrix · #135 `atlas-orient` installable agent skill (`skills/`) · #136 the coverage
+proxy below.
+
+**New tooling — `benchmark/coverage.py` (#136):** a free, deterministic *answer-in-map
+coverage* metric. It reproduces the recorded comprehension coverage (**12/20 @ 2048,
+17/20 @ 3072**) in milliseconds, so a ranking/budget change can be vetted **without a
+billed `claude -p` run**. **First finding:** ordering the symbol index by per-symbol
+score instead of file rank **regressed** coverage (12 → 7 @ 2048) — reverted; file-rank
+ordering wins. Vet any ranking idea with `coverage.py` before spending on a billed run.
+
 ## Board
+
+**As of 2026-06-21 — NOW:** review/merge the 4 open PRs (#133–#136); enable GitHub
+Pages (`/docs`); per-symbol index ranking explored and **shelved** (regresses coverage
+— see above). **NEXT:** `coverage.py`-vetted ranking/budget experiments; expand the
+benchmark suite (10+ tasks, trimmed means) to make the edit-task signal claim-worthy.
+**NOT-YET:** `--watch` daemon; competitive benchmark arms (vs Aider / ctags at equal
+budget). *(The historical table below is kept as the M0–M3 build log.)*
 
 | NOW | NEXT | NOT-YET |
 |---|---|---|
