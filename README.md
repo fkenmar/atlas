@@ -208,7 +208,11 @@ atlas . --for-agent -o atlas-map.md
 atlas . --focus src/auth --focus src/api > atlas-map.md
 ```
 
-**Keep it in the repo** so every contributor and agent starts oriented — commit `atlas-map.md` and regenerate it in a [pre-commit hook](docs/pre-commit.md) or [CI](docs/ci-recipes.md), or point your [`CLAUDE.md` / `AGENTS.md`](docs/agent-files.md) at it.
+**Keep it in the repo** so every contributor and agent starts oriented — commit `atlas-map.md` and regenerate it in a [pre-commit hook](docs/pre-commit.md) or [CI](docs/ci-recipes.md), or point your [`CLAUDE.md` / `AGENTS.md`](docs/agent-files.md) at it. To keep a committed map honest, gate it with `--check` — like `rustfmt --check`, it regenerates the map and compares byte-for-byte against the committed file instead of writing, exiting `1` if it's stale (so CI or a hook fails until you regenerate and commit):
+
+```
+atlas . --check atlas-map.md
+```
 
 For copy-paste recipes per agent (Claude Code, Cursor, Copilot, terminal agents) and per-editor [task snippets](docs/editor-snippets.md), see the [agent integration cookbook](docs/agent-cookbook.md).
 
