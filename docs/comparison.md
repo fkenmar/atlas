@@ -43,10 +43,26 @@ or editor integration.
 - The comprehension benchmark is the strongest current public evidence:
   20/20 accuracy in both arms, median tokens 85,670 -> 29,781 (-65.2%), and
   median turns 3 -> 1 at the default 2,048-token budget.
+- **Head-to-head vs Aider repo-map (equal budget, fresh — 2026-06-21).** Same
+  20-question comprehension benchmark, matched map size (~2k tokens: atlas 2,040,
+  Aider 1,942), claude-sonnet-4-6, pytest 8.2.0. All arms 20/20 accuracy. Median
+  tokens: without-map 86,525; **Aider repo-map 59,452 (-31.3%); atlas 29,937
+  (-65.4%)** -- atlas answers at ~half Aider's token cost. atlas's map held 12/20
+  answer keys vs Aider's 2/20; Aider also overshot its 2,048-token budget ~2x
+  (4,126 actual) and still reached only 5/20. Aider spends budget on test/doc
+  files and function-body snippets; atlas ranks and surfaces the symbol index.
+  (N=1/arm; comprehension is low-variance. See benchmark/history.md.)
+- **vs behavioral "write-less-code" skills (e.g. ponytail) — complementary, not
+  rivals.** Those operate on agent *output*; atlas supplies *input context*. On a
+  find-and-reuse edit task (use an existing helper instead of reimplementing),
+  atlas reused the helper (PASS, 662k explore tok / 7 turns) while ponytail's skill
+  alone reimplemented it (FAIL, capped) — a "reuse, don't rewrite" instruction can't
+  help an agent find code it can't see. Both map-having arms passed; both map-less
+  arms failed. (N=1, edit-task variance is high; the pass/fail is the signal.)
 - `atlas diff` reports structural deltas between directories or git revisions,
   with Markdown, JSON, and XML output.
-- `atlas serve --mcp` exposes read-only `get_map` and `get_symbol` tools over
-  stdio, confined by `--root`.
+- `atlas serve --mcp` exposes read-only map, symbol lookup, anchor-index, and
+  anchor-expansion tools over stdio, confined by `--root`.
 
 ## Claims to avoid
 
@@ -55,7 +71,9 @@ or editor integration.
   high variance and not headline-worthy.
 - Do not claim semantic understanding, type checking, rename safety, or
   go-to-definition accuracy. Those are LSP/compiler jobs.
-- Do not imply competitor superiority without a fresh equal-budget benchmark.
+- Do not imply competitor superiority beyond what a fresh equal-budget benchmark
+  shows. The Aider head-to-head above is backed (matched ~2k tokens, both 20/20
+  accuracy); ctags, tree-sitter CLI, and concat packers are not yet measured.
 
 ## Practical positioning copy
 

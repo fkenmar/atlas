@@ -92,7 +92,7 @@ $ repomap . --focus src/auth/ --focus src/api/routes.ts
 $ repomap . --lang ts,py             # restrict languages
 $ repomap . --no-private             # public API surface only
 $ repomap . --watch                  # daemon: re-emit on file change
-$ repomap serve --mcp                # expose as MCP server (get_map, get_symbol tools)
+$ repomap serve --mcp                # expose as MCP server (map/symbol/anchor tools)
 $ repomap diff HEAD~5                # API-surface diff between git revisions
 ```
 
@@ -130,7 +130,7 @@ class Session(Base)   # fields: id, user_id, expires_at
 | FR-5 | Markdown, JSON, and XML renderers with a versioned, documented JSON schema. | P0 (md/json), P1 (xml) |
 | FR-6 | Incremental cache keyed on (file path, content hash, grammar version); only changed files re-parse. | P0 |
 | FR-7 | Ignore handling: .gitignore, .repomapignore, built-in vendored-path defaults. | P0 |
-| FR-8 | MCP server mode exposing get_map(budget, focus) and get_symbol(name) tools. | P1 |
+| FR-8 | MCP server mode exposing get_map(budget, focus), get_symbol(name), get_symbol_index(budget), and expand_symbol(anchor) tools. | P1 |
 | FR-9 | --watch daemon mode for editor/agent integrations. | P1 |
 | FR-10 | repomap diff <rev>: API-surface diff between two git revisions. | P2 |
 | FR-11 | Exact BPE token counting (tiktoken-rs) for budget enforcement; tokenizer selectable via flag. | P0 |

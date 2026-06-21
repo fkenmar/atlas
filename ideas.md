@@ -48,6 +48,25 @@ Format: `- **idea** — why it's parked (date)`
   output, shell completions) that stays a pipe, not an app. Revisit only if real
   users ask to *inspect* maps by hand and the MCP/CLI path has shipped.
 
+- **Cross-turn / session "delta map" injection** — researched 2026-06-20
+  (deep-research wf_f77927e7) as a way to "improve the agent's memory + cut tokens"
+  by emitting only the structural change since the agent last saw the map.
+  **Verdict: low value as a context-injection feature — it does not beat prompt
+  caching.** Confirmed evidence: (1) a budgeted map placed in the cache-stable
+  prefix is re-read at ~10% of input cost (Anthropic prompt caching: cache reads =
+  0.1× input price), and caching already cuts agentic cost 41–80% — so the per-turn
+  re-read this would "save" is already cheap; (2) caching is prefix-based, so a delta
+  that *changes every turn* would itself invalidate the cached prefix and be re-paid
+  at full input cost each turn — plausibly worse than re-reading the cached full map;
+  (3) the only regime where a delta wins is cross-session / after the 5-min cache TTL
+  expires / after context-editing eviction — and that *cross-session structural delta
+  is already shipped* as `atlas diff <old> <new>`. **In-scope alternative already
+  chosen:** make the committed map cache-stable by default (`atlas --check`, shipped
+  2026-06-20) and build progressive disclosure / lazy symbol expansion over MCP — the
+  one lever that attacks context-window *occupancy*, which caching does not fix.
+  Revisit only if a measured cross-session injection workflow shows the full-map
+  re-send cost is material.
+
 ## Tried and reverted
 
 The self-improvement loop (docs/SELF_IMPROVEMENT.md) appends reverted

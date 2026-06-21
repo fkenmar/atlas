@@ -8,6 +8,10 @@ metadata, trust files, preview assets, and claims in sync.
 - [ ] `cargo fmt --all`
 - [ ] `cargo clippy --all-targets -- -D warnings`
 - [ ] `cargo test`
+- [ ] Pick the intended release channel (`alpha`, `beta`, or `stable`) and run
+      the matching gate in [release-readiness.md](release-readiness.md).
+- [ ] If any channel blocker is intentionally waived, name the issue and user
+      impact in `CHANGELOG.md` and the GitHub release notes.
 - [ ] Confirm the privacy model still matches
       [docs/PRIVACY.md](PRIVACY.md): local operation, no telemetry, cache only
       under `.atlas/`.
@@ -18,6 +22,14 @@ metadata, trust files, preview assets, and claims in sync.
       clears the protocol in `benchmark/README.md`.
 - [ ] Confirm README badges point at the release, CI, license, and supported
       language set users will see on `main`.
+
+## Release-channel go/no-go
+
+| Channel | Go/no-go check |
+|---|---|
+| Alpha | README says alpha; prerelease/install caveats are visible; benchmark claims match committed evidence. |
+| Beta | All beta blockers in [release-readiness.md](release-readiness.md) are closed or explicitly waived in release notes. |
+| Stable | All stable blockers in [release-readiness.md](release-readiness.md) are closed; public schemas, install paths, security posture, and support process are treated as compatibility promises. |
 
 ## Install channels
 

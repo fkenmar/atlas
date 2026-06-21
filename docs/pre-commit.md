@@ -23,18 +23,21 @@ This regenerates and stages the map on every commit. `.git/hooks/` isn't shared,
 so document it in your README or ship a setup script
 (`cp scripts/pre-commit .git/hooks/ && chmod +x .git/hooks/pre-commit`).
 
-Prefer a **check** over auto-staging? Fail the commit when the map is stale
-instead:
+Prefer a **check** over auto-staging? Use `--check` to fail the commit when the
+map is stale, without writing anything — like `rustfmt --check`, it regenerates
+the map and compares it byte-for-byte against the committed file, exiting `1` if
+they differ (and `2` on a usage error such as a missing target):
 
 ```sh
 #!/usr/bin/env sh
 set -e
-atlas . --budget 2048 -o atlas-map.md
-if ! git diff --quiet -- atlas-map.md; then
-  echo "atlas-map.md was stale; it has been regenerated. Review and re-commit."
-  exit 1
-fi
+# Exit 1 (commit blocked) if atlas-map.md no longer matches the code.
+atlas . --budget 2048 --check atlas-map.md
 ```
+
+`--check` is mutually exclusive with `-o`/`--output` (one verifies, the other
+writes). Keep the `--budget`/flags identical to the command that *generates* the
+map, or the check will flap.
 
 ## Option B — pre-commit framework
 

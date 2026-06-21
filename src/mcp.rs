@@ -3,10 +3,10 @@
 //!
 //! [`handle`] is a pure request → response dispatch (`None` for notifications),
 //! so the protocol is unit-testable without any I/O; [`serve`] is a thin stdin
-//! loop over it. Two tools: `get_map` runs the map pipeline, and `get_symbol`
-//! locates a declaration by name (`crate::api::find_symbol`). Both are strictly
-//! read-only — they parse uncached (never writing a `.atlas` cache into the
-//! target), are confined to `root` (#102), and make no network calls.
+//! loop over it. Tools expose maps, symbol search, a thin anchor index, and
+//! single-anchor expansion. All are strictly read-only — they parse uncached
+//! (never writing a `.atlas` cache into the target), are confined to `root`
+//! (#102), and make no network calls.
 
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -57,7 +57,7 @@ pub fn handle(req: &Value, root: &Path) -> Option<Value> {
         "initialize" => Some(result(id, initialize_result())),
         "tools/list" => Some(result(
             id,
-            json!({ "tools": [get_map_tool(), get_symbol_tool()] }),
+            json!({ "tools": [get_map_tool(), get_symbol_tool(), get_symbol_index_tool(), expand_symbol_tool()] }),
         )),
         "tools/call" => Some(result(id, handle_tools_call(req, root))),
         "ping" => Some(result(id, json!({}))),
@@ -117,6 +117,49 @@ fn get_symbol_tool() -> Value {
     })
 }
 
+fn get_symbol_index_tool() -> Value {
+    json!({
+        "name": "get_symbol_index",
+        "description": "Return a thin, budgeted progressive-disclosure index of stable \
+                        symbol anchors (relpath#name, with @line only for same-file \
+                        duplicate names). Contains names, kinds, files, lines, and \
+                        visibility, but no signatures or bodies; call expand_symbol \
+                        for just-in-time detail.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "Repository root to index." },
+                "budget": { "type": "integer", "description": "Token budget for the rendered anchor index (default 2048)." },
+                "no_private": { "type": "boolean", "description": "Public symbols only." },
+                "lang": { "type": "array", "items": { "type": "string" }, "description": "Restrict to languages by extension, e.g. [\"py\", \"rs\"]. A comma-separated string is also accepted." }
+            },
+            "required": ["path"]
+        }
+    })
+}
+
+fn expand_symbol_tool() -> Value {
+    json!({
+        "name": "expand_symbol",
+        "description": "Expand one symbol anchor from a thin map index into its full \
+                        signature plus its defining file's one-hop neighbors (the files it \
+                        imports and the files that import it). Pass an anchor like \
+                        \"src/cache.rs#Cache\", or \"src/x.rs#from@42\" to pin an overload \
+                        by line. Read-only and structural only — it never resolves who calls \
+                        the symbol (that would be code intelligence).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "Repository root the anchor is relative to." },
+                "anchor": { "type": "string", "description": "Symbol anchor: \"relpath#name\" or \"relpath#name@line\"." },
+                "no_private": { "type": "boolean", "description": "Resolve public symbols only." },
+                "lang": { "type": "array", "items": { "type": "string" }, "description": "Restrict to languages by extension, e.g. [\"py\", \"rs\"]." }
+            },
+            "required": ["path", "anchor"]
+        }
+    })
+}
+
 /// Execute a `tools/call`. Tool-level failures come back as an `isError` result
 /// (so the model sees them); only the shape is a successful JSON-RPC result.
 /// `root` confines every tool to its subtree (#102).
@@ -130,8 +173,10 @@ fn handle_tools_call(req: &Value, root: &Path) -> Value {
     match name {
         "get_map" => call_get_map(args, root),
         "get_symbol" => call_get_symbol(args, root),
+        "get_symbol_index" => call_get_symbol_index(args, root),
+        "expand_symbol" => call_expand_symbol(args, root),
         other => tool_error(format!(
-            "unknown tool: {other:?} (available: \"get_map\", \"get_symbol\")"
+            "unknown tool: {other:?} (available: \"get_map\", \"get_symbol\", \"get_symbol_index\", \"expand_symbol\")"
         )),
     }
 }
@@ -199,6 +244,145 @@ fn call_get_symbol(args: Option<&Value>, root: &Path) -> Value {
                 "count": definitions.len(),
                 "definitions": definitions,
             });
+            let text = serde_json::to_string_pretty(&payload).unwrap_or_default();
+            json!({ "content": [{ "type": "text", "text": text }], "isError": false })
+        }
+        Err(e) => tool_error(e.to_string()),
+    }
+}
+
+fn call_get_symbol_index(args: Option<&Value>, root: &Path) -> Value {
+    let Some(path) = arg_str(args, "path") else {
+        return tool_error("get_symbol_index requires a string \"path\" argument".to_string());
+    };
+    let budget = arg_u64(args, "budget")
+        .map(|b| b as usize)
+        .unwrap_or(DEFAULT_BUDGET);
+    let no_private = arg_bool(args, "no_private");
+    let langs = match parse_lang_arg(args) {
+        Ok(l) => l,
+        Err(e) => return tool_error(e),
+    };
+    let target = match confine(path, root) {
+        Ok(t) => t,
+        Err(e) => return tool_error(e),
+    };
+    let opts = crate::api::MapOptions {
+        budget,
+        no_private,
+        langs,
+        focus: Vec::new(),
+        cache: false,
+    };
+    match crate::api::build_symbol_index(&target, &opts) {
+        Ok(index) => {
+            let entries: Vec<Value> = index
+                .entries
+                .iter()
+                .map(|e| {
+                    json!({
+                        "anchor": e.anchor,
+                        "name": e.name,
+                        "kind": e.kind,
+                        "file": e.file,
+                        "line": e.line,
+                        "visibility": e.visibility,
+                    })
+                })
+                .collect();
+            let payload = json!({
+                "repo": {
+                    "name": index.repo_name,
+                    "loc": index.total_loc,
+                    "files": index.total_files,
+                },
+                "budget": {
+                    "target": index.target_tokens,
+                    "rendered": index.rendered_tokens,
+                },
+                "count": entries.len(),
+                "entries": entries,
+                "skipped_files": index.skipped_files,
+                "unwired_files": index.unwired_files,
+            });
+            let text = serde_json::to_string_pretty(&payload).unwrap_or_default();
+            json!({ "content": [{ "type": "text", "text": text }], "isError": false })
+        }
+        Err(e) => tool_error(e.to_string()),
+    }
+}
+
+/// Parse a symbol anchor (ADR 0009): `relpath#name` or `relpath#name@line`.
+/// Splits on the first `#` (file paths don't contain `#`); a trailing
+/// `@<digits>` is the optional line pin. Returns `None` if either side is empty.
+fn parse_anchor(anchor: &str) -> Option<(&str, &str, Option<usize>)> {
+    let (file, rest) = anchor.split_once('#')?;
+    if file.is_empty() || rest.is_empty() {
+        return None;
+    }
+    if let Some((name, line_str)) = rest.rsplit_once('@') {
+        if !name.is_empty() && !line_str.is_empty() && line_str.bytes().all(|b| b.is_ascii_digit())
+        {
+            if let Ok(line) = line_str.parse::<usize>() {
+                return Some((file, name, Some(line)));
+            }
+        }
+    }
+    Some((file, rest, None))
+}
+
+fn call_expand_symbol(args: Option<&Value>, root: &Path) -> Value {
+    let Some(path) = arg_str(args, "path") else {
+        return tool_error("expand_symbol requires a string \"path\" argument".to_string());
+    };
+    let Some(anchor) = arg_str(args, "anchor") else {
+        return tool_error(
+            "expand_symbol requires a string \"anchor\" argument (e.g. \"src/cache.rs#Cache\")"
+                .to_string(),
+        );
+    };
+    let Some((file, name, line)) = parse_anchor(anchor) else {
+        return tool_error(format!(
+            "malformed anchor {anchor:?} — expected \"relpath#name\" or \"relpath#name@line\""
+        ));
+    };
+    let no_private = arg_bool(args, "no_private");
+    let langs = match parse_lang_arg(args) {
+        Ok(l) => l,
+        Err(e) => return tool_error(e),
+    };
+    let target = match confine(path, root) {
+        Ok(t) => t,
+        Err(e) => return tool_error(e),
+    };
+    let opts = crate::api::MapOptions {
+        budget: DEFAULT_BUDGET,
+        no_private,
+        langs,
+        focus: Vec::new(),
+        cache: false,
+    };
+    match crate::api::expand_symbol(&target, file, name, line, &opts) {
+        Ok(Some(e)) => {
+            let payload = json!({
+                "anchor": anchor,
+                "found": true,
+                "name": e.hit.name,
+                "file": e.hit.file,
+                "line": e.hit.line,
+                "kind": e.hit.kind,
+                "visibility": e.hit.visibility,
+                "signature": e.hit.signature,
+                "imports": e.imports,
+                "used_by": e.used_by,
+            });
+            let text = serde_json::to_string_pretty(&payload).unwrap_or_default();
+            json!({ "content": [{ "type": "text", "text": text }], "isError": false })
+        }
+        // A stale or unknown anchor is a successful empty result, not an error
+        // (mirrors get_symbol's unknown-name behavior).
+        Ok(None) => {
+            let payload = json!({ "anchor": anchor, "found": false });
             let text = serde_json::to_string_pretty(&payload).unwrap_or_default();
             json!({ "content": [{ "type": "text", "text": text }], "isError": false })
         }
@@ -387,7 +571,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_has_get_map_and_get_symbol() {
+    fn tools_list_has_map_symbol_index_and_expand_tools() {
         let resp = handle(
             &json!({"jsonrpc":"2.0","id":2,"method":"tools/list"}),
             any_root(),
@@ -402,6 +586,12 @@ mod tests {
         let required = &resp["result"]["tools"][1]["inputSchema"]["required"];
         assert_eq!(required[0], "path");
         assert_eq!(required[1], "name");
+        assert_eq!(resp["result"]["tools"][2]["name"], "get_symbol_index");
+        assert_eq!(
+            resp["result"]["tools"][2]["inputSchema"]["required"][0],
+            "path"
+        );
+        assert_eq!(resp["result"]["tools"][3]["name"], "expand_symbol");
     }
 
     #[test]
@@ -543,6 +733,114 @@ mod tests {
         )
         .unwrap();
         assert_eq!(resp["result"]["isError"], true);
+    }
+
+    #[test]
+    fn get_symbol_index_returns_anchors_without_signatures() {
+        let repo = temp_source_repo("index");
+        let path = repo.to_string_lossy().to_string();
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":20,"method":"tools/call",
+                "params": { "name": "get_symbol_index", "arguments": { "path": path, "budget": 512 } }
+            }),
+            &repo,
+        )
+        .unwrap();
+        assert_eq!(resp["result"]["isError"], false);
+        let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+        let payload: Value = serde_json::from_str(text).expect("get_symbol_index returns JSON");
+        assert_eq!(payload["count"], 1);
+        assert_eq!(payload["entries"][0]["anchor"], "app.py#run");
+        assert_eq!(payload["entries"][0]["name"], "run");
+        assert_eq!(payload["entries"][0]["file"], "app.py");
+        assert_eq!(payload["entries"][0]["kind"], "function");
+        assert!(payload["entries"][0].get("signature").is_none());
+        // Read-only (#102): indexing must not write a cache.
+        assert!(
+            !repo.join(".atlas").exists(),
+            "get_symbol_index wrote a cache"
+        );
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn expand_symbol_returns_signature_and_neighbors() {
+        let repo = temp_source_repo("expand");
+        let path = repo.to_string_lossy().to_string();
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":21,"method":"tools/call",
+                "params": { "name": "expand_symbol", "arguments": { "path": path, "anchor": "app.py#run" } }
+            }),
+            &repo,
+        )
+        .unwrap();
+        assert_eq!(resp["result"]["isError"], false);
+        let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+        let payload: Value = serde_json::from_str(text).expect("expand_symbol returns JSON");
+        assert_eq!(payload["found"], true);
+        assert_eq!(payload["name"], "run");
+        assert_eq!(payload["file"], "app.py");
+        assert_eq!(payload["kind"], "function");
+        assert!(payload["signature"].as_str().unwrap().contains("run"));
+        assert!(payload["imports"].is_array());
+        assert!(payload["used_by"].is_array());
+        // Read-only (#102): expand_symbol must not write a cache.
+        assert!(!repo.join(".atlas").exists(), "expand_symbol wrote a cache");
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn expand_symbol_unknown_anchor_is_found_false() {
+        let repo = temp_source_repo("expand-miss");
+        let path = repo.to_string_lossy().to_string();
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":22,"method":"tools/call",
+                "params": { "name": "expand_symbol", "arguments": { "path": path, "anchor": "app.py#nope" } }
+            }),
+            &repo,
+        )
+        .unwrap();
+        assert_eq!(resp["result"]["isError"], false);
+        let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+        let payload: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(payload["found"], false);
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn expand_symbol_malformed_anchor_is_tool_error() {
+        let resp = handle(
+            &json!({
+                "jsonrpc":"2.0","id":23,"method":"tools/call",
+                "params": { "name": "expand_symbol", "arguments": { "path": ".", "anchor": "noHashHere" } }
+            }),
+            any_root(),
+        )
+        .unwrap();
+        assert_eq!(resp["result"]["isError"], true);
+    }
+
+    #[test]
+    fn parse_anchor_splits_file_name_and_optional_line() {
+        assert_eq!(
+            parse_anchor("src/x.rs#Foo"),
+            Some(("src/x.rs", "Foo", None))
+        );
+        assert_eq!(
+            parse_anchor("src/x.rs#from@42"),
+            Some(("src/x.rs", "from", Some(42)))
+        );
+        // A non-numeric @suffix is part of the name, not a line pin.
+        assert_eq!(
+            parse_anchor("src/x.rs#Foo@bar"),
+            Some(("src/x.rs", "Foo@bar", None))
+        );
+        assert_eq!(parse_anchor("nohash"), None);
+        assert_eq!(parse_anchor("a#"), None);
+        assert_eq!(parse_anchor("#name"), None);
     }
 
     #[test]

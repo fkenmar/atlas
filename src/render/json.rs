@@ -40,10 +40,12 @@ pub fn render(map: &BudgetedMap) -> String {
         .iter()
         .map(|s| {
             format!(
-                "{{\"name\": {}, \"kind\": {}, \"path\": {}}}",
+                "{{\"name\": {}, \"kind\": {}, \"path\": {}, \"anchor\": {}, \"line\": {}}}",
                 json_str(&s.name),
                 json_str(kind_name(s.kind)),
-                json_str(&s.rel)
+                json_str(&s.rel),
+                json_str(&s.anchor),
+                s.line
             )
         })
         .collect();
@@ -219,6 +221,8 @@ mod tests {
                 name: "Widget".to_string(),
                 kind: SymbolKind::Class,
                 rel: "src/widget.py".to_string(),
+                anchor: "src/widget.py#Widget".to_string(),
+                line: 7,
             }],
             skipped_files: 1,
             unwired_files: 2,
@@ -237,7 +241,7 @@ mod tests {
         assert!(json.contains("\"line\": 12, \"visibility\": \"public\""));
         assert!(json.contains("\"dir\": \"tests\", \"count\": 4"));
         assert!(
-            json.contains("\"name\": \"Widget\", \"kind\": \"class\", \"path\": \"src/widget.py\"")
+            json.contains("\"name\": \"Widget\", \"kind\": \"class\", \"path\": \"src/widget.py\", \"anchor\": \"src/widget.py#Widget\", \"line\": 7")
         );
         assert!(json.contains("\"skipped_files\": 1, \"unwired_files\": 2"));
     }

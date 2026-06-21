@@ -38,6 +38,14 @@ When an AI coding agent works in your repo, it spends most of its effort just fi
 
 In our benchmark, agents given an atlas map answered structural questions about a codebase using **~65% fewer tokens at identical accuracy** (20/20 correct *with* and *without* the map — 85,670 → 29,781 tokens) — typically resolving in a **single turn instead of three**. On open-ended edit tasks the map cuts turns too, though token savings there vary by task. These are numbers you can [reproduce yourself](benchmark/README.md#reproduce-the-headline-number) — the harness and the 20 verified questions are in the repo.
 
+| Structural-comprehension benchmark | Without map | With atlas | Δ |
+|---|:--:|:--:|:--:|
+| Tokens to answer | 85,670 | 29,781 | **−65.2%** |
+| Turns to answer (median) | 3 | 1 | **−2 turns** |
+| Accuracy | 20 / 20 | 20 / 20 | **0 regressions** |
+
+<sub>20 verified structural questions · claude-sonnet-4-6 · 3 runs/arm · [pytest 8.2.0](https://github.com/pytest-dev/pytest) (92k LOC) · default 2,048-token map · read-only both arms. Edit-task token deltas are high-variance, so we headline only the stable, accuracy-gated signal.</sub>
+
 ## What it looks like
 
 Run `atlas src --budget 600` on this repo and it prints:
@@ -208,11 +216,15 @@ atlas . --for-agent -o atlas-map.md
 atlas . --focus src/auth --focus src/api > atlas-map.md
 ```
 
-**Keep it in the repo** so every contributor and agent starts oriented — commit `atlas-map.md` and regenerate it in a [pre-commit hook](docs/pre-commit.md) or [CI](docs/ci-recipes.md), or point your [`CLAUDE.md` / `AGENTS.md`](docs/agent-files.md) at it.
+**Keep it in the repo** so every contributor and agent starts oriented — commit `atlas-map.md` and regenerate it in a [pre-commit hook](docs/pre-commit.md) or [CI](docs/ci-recipes.md), or point your [`CLAUDE.md` / `AGENTS.md`](docs/agent-files.md) at it. To keep a committed map honest, gate it with `--check` — like `rustfmt --check`, it regenerates the map and compares byte-for-byte against the committed file instead of writing, exiting `1` if it's stale (so CI or a hook fails until you regenerate and commit):
+
+```
+atlas . --check atlas-map.md
+```
 
 For copy-paste recipes per agent (Claude Code, Cursor, Copilot, terminal agents) and per-editor [task snippets](docs/editor-snippets.md), see the [agent integration cookbook](docs/agent-cookbook.md).
 
-> Experimental on `dev`: `atlas serve --mcp` exposes a `get_map` tool over stdio JSON-RPC/MCP so compatible agents can pull a fresh map directly.
+> Experimental on `dev`: `atlas serve --mcp` exposes read-only map, symbol lookup, thin symbol-index, and anchor-expansion tools over stdio JSON-RPC/MCP so compatible agents can pull fresh context directly.
 
 ---
 
@@ -242,9 +254,17 @@ discover → parse → link → rank → budget → render
 
 It reads your repo with [tree-sitter](https://tree-sitter.github.io/tree-sitter/), respects `.gitignore` (and `.atlasignore`), and caches parse results so re-runs are fast.
 
-For a factual comparison against Aider repo-map, ctags, tree-sitter CLI,
-Sourcegraph/SCIP, and concat-style repo packers, see
-[`docs/comparison.md`](docs/comparison.md).
+**How atlas compares** — the *standalone combination* is the point:
+
+| | atlas | Aider repo-map | ctags | concat / packers |
+|---|:--:|:--:|:--:|:--:|
+| Works with any agent (standalone) | ✓ | embedded in Aider | ✓ | ✓ |
+| Graph ranking + token budget | ✓ | ✓ *(internal)* | — | — |
+| Reverse-dependency edges | ✓ | inside Aider | — | — |
+| MCP server | ✓ | — | — | — |
+| Single-binary install | ✓ | Python app | native pkg | varies |
+
+<sub>Aider's repo-map pioneered the ranked-map idea; atlas unbundles it into a standalone, deterministic CLI/library/MCP tool usable with <em>any</em> agent. Full, fair breakdown — including tree-sitter CLI and Sourcegraph/SCIP — in <a href="docs/comparison.md">docs/comparison.md</a>.</sub>
 
 ---
 
@@ -264,11 +284,16 @@ More answers in the [FAQ](docs/FAQ.md).
 
 ## Project status
 
-Alpha. The core works end-to-end and is benchmark-tested, but the CLI and output format may still change — pin a version if you depend on the output. See [STATUS.md](STATUS.md) for the current state, [CHANGELOG.md](CHANGELOG.md) for what's landed, and [docs/PRD.md](docs/PRD.md) for the full design.
+Current release channel: **alpha**. The core works end-to-end and is
+benchmark-tested, but CLI flags, output shape, install paths, and docs may still
+change. Pin a version if you depend on the output. See
+[release readiness gates](docs/release-readiness.md) for the alpha/beta/stable
+criteria, [STATUS.md](STATUS.md) for current state, [CHANGELOG.md](CHANGELOG.md)
+for what's landed, and [docs/PRD.md](docs/PRD.md) for the full design.
 
 `atlas diff <old> <new>` shows the structural delta between two trees — added/removed/changed signatures and import edges — so an agent sees what moved without re-reading the tree. Each side is a directory **or a git revision** (`atlas diff HEAD~1 HEAD`, `atlas diff v0.2.0 .`); revisions are checked out via `git` under the hood (no extra setup). Markdown by default; `--format json` or `xml` for tooling and CI.
 
-Experimental on `dev`: an MCP stdio server (`atlas serve --mcp`) lets compatible agents query the map directly through a `get_map` tool.
+Experimental on `dev`: an MCP stdio server (`atlas serve --mcp`) lets compatible agents query the map, look up symbols, request a thin anchor index, and expand selected anchors on demand.
 
 ---
 

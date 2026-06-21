@@ -80,10 +80,12 @@ pub fn render(map: &BudgetedMap) -> String {
         for s in &map.symbol_index {
             let _ = writeln!(
                 out,
-                "    <symbol name=\"{}\" kind=\"{}\" path=\"{}\"/>",
+                "    <symbol name=\"{}\" kind=\"{}\" path=\"{}\" anchor=\"{}\" line=\"{}\"/>",
                 xml_escape(&s.name, true),
                 kind_name(s.kind),
-                xml_escape(&s.rel, true)
+                xml_escape(&s.rel, true),
+                xml_escape(&s.anchor, true),
+                s.line
             );
         }
         out.push_str("  </symbol_index>\n");
@@ -240,6 +242,8 @@ mod tests {
                 name: "Widget".to_string(),
                 kind: SymbolKind::Class,
                 rel: "src/widget.py".to_string(),
+                anchor: "src/widget.py#Widget".to_string(),
+                line: 7,
             }],
             skipped_files: 1,
             unwired_files: 2,
@@ -265,7 +269,10 @@ mod tests {
         assert!(xml.contains("<import>src/db.py</import>"));
         assert!(xml.contains("<ref>src/api.py</ref>"));
         assert!(xml.contains("<dir dir=\"tests\" count=\"4\"/>"));
-        assert!(xml.contains("<symbol name=\"Widget\" kind=\"class\" path=\"src/widget.py\"/>"));
+        assert!(xml.contains(
+            "<symbol name=\"Widget\" kind=\"class\" path=\"src/widget.py\" \
+             anchor=\"src/widget.py#Widget\" line=\"7\"/>"
+        ));
         assert!(xml.contains("<skipped_files>1</skipped_files>"));
         assert!(xml.contains("<unwired_files>2</unwired_files>"));
         assert!(xml.trim_end().ends_with("</atlas>"));

@@ -73,7 +73,7 @@ Most use a bullet `- [name](url) - description.` under a category. atlas fits
 **Developer Tools** / **Code Analysis**:
 
 ```markdown
-- [atlas](https://github.com/fkenmar/atlas) 🦀 🏠 - Compiles a repo into a token-budgeted structural map (ranked signatures, types, imports — no bodies) for coding agents; exposes a read-only `get_map` tool over MCP stdio.
+- [atlas](https://github.com/fkenmar/atlas) 🦀 🏠 - Compiles a repo into a token-budgeted structural map (ranked signatures, types, imports — no bodies) for coding agents; exposes read-only map, symbol lookup, anchor-index, and anchor-expansion tools over MCP stdio.
 ```
 
 (Check the list's legend for emoji/badge conventions — 🦀 Rust, 🏠 local. Drop them
@@ -85,7 +85,8 @@ if the list doesn't use them.) MCP setup lives in
 The registry takes a `server.json` published with the `mcp-publisher` CLI
 (GitHub-auth proves you own `io.github.fkenmar/*`). Server facts, verified
 against `src/mcp.rs`: server name `atlas`, transport **stdio**, tools
-**`get_map`** and **`get_symbol`**, launched with `atlas serve --mcp --root .`.
+**`get_map`**, **`get_symbol`**, **`get_symbol_index`**, and
+**`expand_symbol`**, launched with `atlas serve --mcp --root .`.
 
 Starting `server.json` (schema current as of 2025-12-11 — re-check the
 `$schema` URL and validate with `mcp-publisher validate` before publishing):

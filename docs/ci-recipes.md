@@ -56,17 +56,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install atlas
         run: pipx install --pre atlas-map
-      - name: Regenerate and compare
-        run: |
-          atlas . --budget 2048 -o atlas-map.md
-          if ! git diff --quiet -- atlas-map.md; then
-            echo "::error:: atlas-map.md is stale. Regenerate it locally:"
-            echo "    atlas . --budget 2048 -o atlas-map.md"
-            git --no-pager diff -- atlas-map.md
-            exit 1
-          fi
-          echo "atlas-map.md is up to date."
+      - name: Check the committed map is current
+        run: atlas . --budget 2048 --check atlas-map.md
 ```
+
+`--check` regenerates the map and compares it byte-for-byte against the committed
+`atlas-map.md` instead of writing — like `rustfmt --check`. It exits `0` when the
+map is current, `1` when it's stale (failing the build with a regenerate hint),
+and `2` on a usage error such as a missing target. It's mutually exclusive with
+`-o`/`--output`, so the job neither writes nor dirties the working tree.
 
 **Use when** the map is committed and you want it to stay in sync with the code.
 
