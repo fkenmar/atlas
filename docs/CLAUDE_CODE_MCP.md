@@ -1,7 +1,8 @@
 # Claude Code MCP setup
 
 atlas can run as a local MCP server over stdio so a compatible client can call
-`get_map` and `get_symbol` instead of relying on a committed map file.
+`get_map`, `get_symbol`, `get_symbol_index`, and `expand_symbol` instead of
+relying on a committed map file.
 
 Status: experimental but implemented. The server is read-only, makes no network
 calls, and rejects paths outside its configured `--root`.
@@ -81,6 +82,28 @@ surface rather than replace it.
 - `no_private`: public API surface only. Optional.
 - `lang`: extension filter. Optional.
 
+`get_symbol_index` arguments:
+
+- `path`: repository root to index. Required.
+- `budget`: token budget for the rendered anchor index. Optional; default is
+  2048.
+- `no_private`: public API surface only. Optional.
+- `lang`: extension filter. Optional.
+
+The result is a thin JSON index of stable anchors such as
+`src/cache.rs#Cache` or `src/x.rs#from@42`; it intentionally omits signatures.
+
+`expand_symbol` arguments:
+
+- `path`: repository root the anchor is relative to. Required.
+- `anchor`: `relpath#name` or `relpath#name@line`. Required.
+- `no_private`: public API surface only. Optional.
+- `lang`: extension filter. Optional.
+
+The result returns the selected declaration's signature plus the defining file's
+one-hop file-level imports and importers. It does not compute symbol-level
+callers.
+
 ## Smoke test prompt
 
 After adding the server to your client, ask:
@@ -99,6 +122,8 @@ A healthy setup should call `get_map`, return Markdown by default, and mention
 - Call `get_map` before broad repo exploration.
 - Use `focus` when the user names a subsystem or file.
 - Use `get_symbol` for "where is X defined?" before grepping.
+- Use `get_symbol_index` when a full map would crowd the context window, then
+  call `expand_symbol` for the few anchors that matter.
 - Open the source before editing behavior; the map is an index, not the full
   implementation.
 

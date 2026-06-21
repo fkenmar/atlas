@@ -45,8 +45,8 @@ or editor integration.
   median turns 3 -> 1 at the default 2,048-token budget.
 - `atlas diff` reports structural deltas between directories or git revisions,
   with Markdown, JSON, and XML output.
-- `atlas serve --mcp` exposes read-only `get_map` and `get_symbol` tools over
-  stdio, confined by `--root`.
+- `atlas serve --mcp` exposes read-only map, symbol lookup, anchor-index, and
+  anchor-expansion tools over stdio, confined by `--root`.
 
 ## Claims to avoid
 

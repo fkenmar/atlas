@@ -212,7 +212,7 @@ atlas . --focus src/auth --focus src/api > atlas-map.md
 
 For copy-paste recipes per agent (Claude Code, Cursor, Copilot, terminal agents) and per-editor [task snippets](docs/editor-snippets.md), see the [agent integration cookbook](docs/agent-cookbook.md).
 
-> Experimental on `dev`: `atlas serve --mcp` exposes a `get_map` tool over stdio JSON-RPC/MCP so compatible agents can pull a fresh map directly.
+> Experimental on `dev`: `atlas serve --mcp` exposes read-only map, symbol lookup, thin symbol-index, and anchor-expansion tools over stdio JSON-RPC/MCP so compatible agents can pull fresh context directly.
 
 ---
 
@@ -268,7 +268,7 @@ Alpha. The core works end-to-end and is benchmark-tested, but the CLI and output
 
 `atlas diff <old> <new>` shows the structural delta between two trees — added/removed/changed signatures and import edges — so an agent sees what moved without re-reading the tree. Each side is a directory **or a git revision** (`atlas diff HEAD~1 HEAD`, `atlas diff v0.2.0 .`); revisions are checked out via `git` under the hood (no extra setup). Markdown by default; `--format json` or `xml` for tooling and CI.
 
-Experimental on `dev`: an MCP stdio server (`atlas serve --mcp`) lets compatible agents query the map directly through a `get_map` tool.
+Experimental on `dev`: an MCP stdio server (`atlas serve --mcp`) lets compatible agents query the map, look up symbols, request a thin anchor index, and expand selected anchors on demand.
 
 ---
 

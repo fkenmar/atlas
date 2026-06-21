@@ -20,7 +20,7 @@ Pre-flight (do once, first): set the repo **description + topics** from
 - **Line to add:**
 
   ```markdown
-  - [atlas](https://github.com/fkenmar/atlas) 🦀 🏠 - Compiles a repo into a token-budgeted structural map (ranked signatures, types, imports — no bodies) for coding agents; read-only `get_map` / `get_symbol` tools over MCP stdio.
+  - [atlas](https://github.com/fkenmar/atlas) 🦀 🏠 - Compiles a repo into a token-budgeted structural map (ranked signatures, types, imports — no bodies) for coding agents; read-only map, symbol lookup, anchor-index, and anchor-expansion tools over MCP stdio.
   ```
 
   (Match the list's emoji legend; 🦀 = Rust, 🏠 = local/self-hosted. Drop them if
@@ -34,7 +34,7 @@ Pre-flight (do once, first): set the repo **description + topics** from
   bodies) so a coding agent can navigate without reading every file.
 
   - Repo: https://github.com/fkenmar/atlas
-  - MCP: `atlas serve --mcp` — tools `get_map`, `get_symbol` (stdio, read-only)
+  - MCP: `atlas serve --mcp` — tools `get_map`, `get_symbol`, `get_symbol_index`, `expand_symbol` (stdio, read-only)
   - Setup: https://github.com/fkenmar/atlas/blob/main/docs/CLAUDE_CODE_MCP.md
 
   Disclosure: I'm the maintainer. Happy to adjust the category or wording to fit
@@ -63,7 +63,8 @@ not a PR.
 ```
 atlas — a local Rust CLI and read-only MCP server that compiles a codebase into a
 token-budgeted structural map for AI coding agents: ranked signatures, types, and
-import edges, no function bodies. Tools: get_map, get_symbol (stdio). In a
+import edges, no function bodies. Tools: get_map, get_symbol, get_symbol_index,
+expand_symbol (stdio). In a
 comprehension benchmark, agents answered the same questions with ~65% fewer
 tokens at identical accuracy.
 ```

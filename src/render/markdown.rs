@@ -9,6 +9,7 @@
 
 use std::fmt::Write as _;
 
+use crate::api::SymbolIndexMap;
 use crate::budget::{BudgetedMap, Detail};
 use crate::parse::{ParseOutcome, SymbolKind};
 
@@ -91,25 +92,25 @@ pub fn render(map: &BudgetedMap) -> String {
     }
 
     // Symbol index: the navigable declarations of files that didn't fit in
-    // full, as bare name → path lines (grouped by file, rank order). Lets an
-    // agent locate the long tail without grepping, at a fraction of a full
-    // block's cost. Entries arrive already ordered (file rank, then source
+    // full, as stable ADR 0009 anchors (grouped by file, rank order). Lets an
+    // agent locate/expand the long tail without grepping, at a fraction of a
+    // full block's cost. Entries arrive already ordered (file rank, then source
     // order), so runs from the same file are contiguous and group cleanly.
     if !map.symbol_index.is_empty() {
         out.push('\n');
         out.push_str(
-            "---\nsymbol index (other defined symbols — names only; \
-             read the listed file for full signatures):\n",
+            "---\nsymbol index (other defined symbols — anchors only; \
+             expand an anchor for full signature):\n",
         );
         let mut i = 0;
         while i < map.symbol_index.len() {
             let rel = &map.symbol_index[i].rel;
-            let mut names: Vec<&str> = Vec::new();
+            let mut anchors: Vec<&str> = Vec::new();
             while i < map.symbol_index.len() && &map.symbol_index[i].rel == rel {
-                names.push(map.symbol_index[i].name.as_str());
+                anchors.push(map.symbol_index[i].anchor.as_str());
                 i += 1;
             }
-            let _ = writeln!(out, "{rel}: {}", names.join(", "));
+            let _ = writeln!(out, "{rel}: {}", anchors.join(", "));
         }
     }
 
@@ -137,6 +138,34 @@ pub fn render(map: &BudgetedMap) -> String {
             out,
             "[{} unparseable file(s) skipped; {} file(s) in languages not yet wired]",
             map.skipped_files, map.unwired_files
+        );
+    }
+    out
+}
+
+/// Render the ADR 0009 progressive-disclosure symbol index: stable anchors only,
+/// no signatures. The API uses this text for exact budget measurement; MCP can
+/// return structured JSON from the same entries.
+pub fn render_symbol_index(index: &SymbolIndexMap) -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "# atlas symbol index: {} ({} LOC, {} files) | budget {} | rendered {} tok",
+        index.repo_name,
+        index.total_loc,
+        index.total_files,
+        index.target_tokens,
+        index.rendered_tokens
+    );
+    for entry in &index.entries {
+        let _ = writeln!(out, "{} {}", entry.kind, entry.anchor);
+    }
+    if index.skipped_files > 0 || index.unwired_files > 0 {
+        out.push('\n');
+        let _ = writeln!(
+            out,
+            "[{} unparseable file(s) skipped; {} file(s) in languages not yet wired]",
+            index.skipped_files, index.unwired_files
         );
     }
     out

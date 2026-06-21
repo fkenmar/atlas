@@ -189,11 +189,11 @@ mod tests {
 
     #[test]
     fn symbol_index_entries_styled_signatures_not() {
-        let plain = "symbol index (other defined symbols — names only):\n_pytest/runner.py: CallInfo, TestReport\n";
+        let plain = "symbol index (other defined symbols — anchors only):\n_pytest/runner.py: _pytest/runner.py#CallInfo, _pytest/runner.py#TestReport\n";
         let out = colorize(plain);
         assert!(out.contains(BLUE), "index path tinted");
-        // The names are present.
-        assert!(out.contains("CallInfo, TestReport"));
+        // The anchors are present.
+        assert!(out.contains("_pytest/runner.py#CallInfo"));
     }
 
     #[test]
