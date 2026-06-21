@@ -128,6 +128,8 @@ See [docs/comparison.md](docs/comparison.md).
   metrics without product telemetry.
 - [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md): release, metadata, and
   community-profile checks.
+- [docs/release-readiness.md](docs/release-readiness.md): alpha, beta, and
+  stable release-channel gates.
 - [docs/post-launch-outreach.md](docs/post-launch-outreach.md): channel-specific
   launch copy and public-source follow-up metrics.
 
