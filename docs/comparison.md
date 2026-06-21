@@ -52,6 +52,13 @@ or editor integration.
   (4,126 actual) and still reached only 5/20. Aider spends budget on test/doc
   files and function-body snippets; atlas ranks and surfaces the symbol index.
   (N=1/arm; comprehension is low-variance. See benchmark/history.md.)
+- **vs behavioral "write-less-code" skills (e.g. ponytail) — complementary, not
+  rivals.** Those operate on agent *output*; atlas supplies *input context*. On a
+  find-and-reuse edit task (use an existing helper instead of reimplementing),
+  atlas reused the helper (PASS, 662k explore tok / 7 turns) while ponytail's skill
+  alone reimplemented it (FAIL, capped) — a "reuse, don't rewrite" instruction can't
+  help an agent find code it can't see. Both map-having arms passed; both map-less
+  arms failed. (N=1, edit-task variance is high; the pass/fail is the signal.)
 - `atlas diff` reports structural deltas between directories or git revisions,
   with Markdown, JSON, and XML output.
 - `atlas serve --mcp` exposes read-only map, symbol lookup, anchor-index, and
