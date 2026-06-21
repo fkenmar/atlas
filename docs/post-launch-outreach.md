@@ -7,6 +7,12 @@ research.
 
 Launch URL placeholder: `https://github.com/fkenmar/atlas`
 
+**Companion playbooks:**
+- [`social-launch.md`](social-launch.md) — ready-to-post X thread and LinkedIn
+  copy, with the honest-claim guardrails baked in.
+- [`submissions.md`](submissions.md) — repo metadata + paste-ready entries for
+  awesome-lists and MCP registries (the long-tail discovery channel).
+
 ## Outreach list
 
 | Channel | Submission rules | Launch URL | Timing | Owner | Status |
