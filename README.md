@@ -246,9 +246,17 @@ discover → parse → link → rank → budget → render
 
 It reads your repo with [tree-sitter](https://tree-sitter.github.io/tree-sitter/), respects `.gitignore` (and `.atlasignore`), and caches parse results so re-runs are fast.
 
-For a factual comparison against Aider repo-map, ctags, tree-sitter CLI,
-Sourcegraph/SCIP, and concat-style repo packers, see
-[`docs/comparison.md`](docs/comparison.md).
+**How atlas compares** — the *standalone combination* is the point:
+
+| | atlas | Aider repo-map | ctags | concat / packers |
+|---|:--:|:--:|:--:|:--:|
+| Works with any agent (standalone) | ✓ | embedded in Aider | ✓ | ✓ |
+| Graph ranking + token budget | ✓ | ✓ *(internal)* | — | — |
+| Reverse-dependency edges | ✓ | inside Aider | — | — |
+| MCP server | ✓ | — | — | — |
+| Single-binary install | ✓ | Python app | native pkg | varies |
+
+<sub>Aider's repo-map pioneered the ranked-map idea; atlas unbundles it into a standalone, deterministic CLI/library/MCP tool usable with <em>any</em> agent. Full, fair breakdown — including tree-sitter CLI and Sourcegraph/SCIP — in <a href="docs/comparison.md">docs/comparison.md</a>.</sub>
 
 ---
 
