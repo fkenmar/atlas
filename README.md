@@ -16,6 +16,7 @@
 
 <sub>
   <a href="#install"><b>Install</b></a> ·
+  <a href="#60-second-quickstart"><b>Quickstart</b></a> ·
   <a href="#use"><b>Use</b></a> ·
   <a href="#use-it-with-your-ai-agent"><b>Use it with your agent</b></a> ·
   <a href="#docs-for-agents"><b>Docs for agents</b></a> ·
@@ -100,6 +101,38 @@ You should see a `# atlas: …` header followed by a list of ranked files. That'
 
 atlas runs locally and does not collect telemetry; see
 [`docs/PRIVACY.md`](docs/PRIVACY.md) for the offline/privacy model.
+
+---
+
+## 60-second quickstart
+
+From zero to a map your agent can read:
+
+```
+pipx install --pre atlas-map     # or any install method above
+atlas --version                  # confirm it's on your PATH
+cd path/to/your/project
+atlas . --budget 1024            # a quick, small map to stdout
+atlas . -o atlas-map.md          # save the full default map to a file
+```
+
+Success looks like a header and a ranked file list — the most central file is
+`#1`:
+
+```
+# atlas: your-project (3740 LOC, 16 files) | budget 1024 | rendered 1012 tok
+
+## cache.rs (#1 — imported by 1 file(s))
+pub struct Cache
+    pub fn open(&Path) -> Cache
+...
+```
+
+If you instead see **`no supported source files found`**, it's almost always the
+two first-run gotchas: you're pointing at a single file or a subfolder instead of
+the **repo root**, or the project is in a language atlas doesn't map yet (the
+error lists the file extensions it saw). Head to the full [usage](#use) and
+[troubleshooting](#troubleshooting) sections from here.
 
 ---
 

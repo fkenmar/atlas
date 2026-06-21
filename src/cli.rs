@@ -633,12 +633,26 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         &format!("{discovered} source file(s)"),
     );
     if discovered == 0 {
-        let hint = unsupported_extension_hint(&root)
-            .map(|h| format!(" Detected file extension(s): {h}."))
-            .unwrap_or_default();
+        let hint = empty_map_hint(&root);
+        let mut detail = String::new();
+        if let Some(exts) = &hint.extensions {
+            detail.push_str(&format!(" Detected file extension(s): {exts}."));
+            if !hint.languages.is_empty() {
+                detail.push_str(&format!(
+                    " atlas does not support {} yet.",
+                    hint.languages.join(", ")
+                ));
+            }
+        } else if hint.skipped_vendored {
+            detail.push_str(
+                " Every file under this path is in an ignored or vendored \
+                 directory (e.g. node_modules, target, vendor) — point atlas at \
+                 the repo root, not an ignored subtree.",
+            );
+        }
         eprintln!(
             "atlas: no supported source files found under {}. atlas maps \
-             {SUPPORTED_LANGUAGE_SUMMARY} ({SUPPORTED_EXTENSION_SUMMARY}).{hint} \
+             {SUPPORTED_LANGUAGE_SUMMARY} ({SUPPORTED_EXTENSION_SUMMARY}).{detail} \
              Is this the repo root? (see --help)",
             cli.path.display(),
         );
@@ -872,9 +886,55 @@ fn replace_file(tmp: &Path, path: &Path) -> std::io::Result<()> {
     }
 }
 
-fn unsupported_extension_hint(root: &Path) -> Option<String> {
+/// Diagnostic data for the empty-map path (#75): what atlas saw under a root
+/// that yielded no supported source files.
+struct EmptyMapHint {
+    /// Top file extensions seen outside ignored/vendored dirs, pre-formatted as
+    /// `.ext (count), …`. `None` when nothing with an extension was found.
+    extensions: Option<String>,
+    /// Recognized programming languages atlas doesn't map, among the top
+    /// extensions — in rank order, deduped.
+    languages: Vec<&'static str>,
+    /// At least one vendored/ignored directory was skipped during the scan,
+    /// which can itself explain an otherwise-empty result.
+    skipped_vendored: bool,
+}
+
+/// Map a common file extension to a programming language atlas does *not*
+/// support, so the empty-map diagnostic can name what it likely saw. Returns
+/// `None` for supported languages and for non-code extensions (data, docs,
+/// markup) where naming a language would be misleading.
+fn unsupported_language_name(ext: &str) -> Option<&'static str> {
+    Some(match ext {
+        "rb" | "erb" | "rake" | "gemspec" => "Ruby",
+        "php" => "PHP",
+        "swift" => "Swift",
+        "kt" | "kts" => "Kotlin",
+        "cs" => "C#",
+        "scala" | "sc" => "Scala",
+        "m" | "mm" => "Objective-C",
+        "lua" => "Lua",
+        "pl" | "pm" => "Perl",
+        "dart" => "Dart",
+        "ex" | "exs" => "Elixir",
+        "erl" | "hrl" => "Erlang",
+        "hs" => "Haskell",
+        "clj" | "cljs" | "cljc" => "Clojure",
+        "sh" | "bash" | "zsh" => "shell scripts",
+        "zig" => "Zig",
+        "jl" => "Julia",
+        "ml" | "mli" => "OCaml",
+        _ => return None,
+    })
+}
+
+/// Scan a root that produced no supported files, ranking the extensions seen
+/// (outside ignored/vendored dirs) and naming any recognized-but-unsupported
+/// languages among the most common ones.
+fn empty_map_hint(root: &Path) -> EmptyMapHint {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut scanned = 0usize;
+    let mut skipped_vendored = false;
     let mut stack = vec![root.to_path_buf()];
 
     while let Some(dir) = stack.pop() {
@@ -897,6 +957,7 @@ fn unsupported_extension_hint(root: &Path) -> Option<String> {
             }
             if file_type.is_dir() {
                 if EXTENSION_HINT_SKIP_DIRS.contains(&name) {
+                    skipped_vendored = true;
                     continue;
                 }
                 stack.push(path);
@@ -917,19 +978,36 @@ fn unsupported_extension_hint(root: &Path) -> Option<String> {
     }
 
     if counts.is_empty() {
-        return None;
+        return EmptyMapHint {
+            extensions: None,
+            languages: Vec::new(),
+            skipped_vendored,
+        };
     }
     let mut ranked: Vec<(String, usize)> = counts.into_iter().collect();
     ranked.sort_by(|(a_ext, a_count), (b_ext, b_count)| {
         b_count.cmp(a_count).then_with(|| a_ext.cmp(b_ext))
     });
-    let hint = ranked
+    ranked.truncate(5);
+
+    let mut languages = Vec::new();
+    for (ext, _) in &ranked {
+        if let Some(lang) = unsupported_language_name(ext) {
+            if !languages.contains(&lang) {
+                languages.push(lang);
+            }
+        }
+    }
+    let extensions = ranked
         .into_iter()
-        .take(5)
         .map(|(ext, count)| format!(".{ext} ({count})"))
         .collect::<Vec<_>>()
         .join(", ");
-    Some(hint)
+    EmptyMapHint {
+        extensions: Some(extensions),
+        languages,
+        skipped_vendored,
+    }
 }
 
 /// Decide whether to ANSI-colorize Markdown output. `auto` colors only when
