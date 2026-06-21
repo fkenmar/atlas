@@ -89,6 +89,8 @@ cargo install --path .
 
 This builds `atlas` into `~/.cargo/bin` — make sure that's on your `PATH` (rustup sets this up by default).
 
+Behind a corporate proxy, on an air-gapped host, or installing from an internal mirror? See [`docs/install-offline.md`](docs/install-offline.md). atlas runs fully offline after install.
+
 Either way, verify and take it for a spin:
 
 ```
@@ -157,6 +159,8 @@ atlas . --color always           # force ANSI color (auto-detects a terminal oth
 When you run atlas in a terminal the Markdown map is colorized for scannability; piped, redirected, or `--output` file output stays plain, so feeding it to an agent or a file is unaffected (`--color never` to disable, `NO_COLOR` is honored).
 
 **Shell completions:** `atlas --completions <bash|zsh|fish|powershell|elvish>` prints a completion script — e.g. `atlas --completions zsh > ~/.zfunc/_atlas`.
+
+**Pasting maps into an agent?** A map is untrusted data derived from source. `--format xml` escapes the content so it can't break out of its container — see the [prompt-injection threat model](docs/prompt-injection.md) for safe wrappers and what escaping does (and doesn't) guarantee.
 
 By default atlas aims for a 2,048-token budget. When a repo doesn't fit, it degrades in steps rather than truncating: it drops private symbols (the header shows `public-only`), then elides parameter detail, then collapses the lowest-ranked files to a single line. Raise `--budget` for more detail, or use `--focus` to protect the paths you care about.
 

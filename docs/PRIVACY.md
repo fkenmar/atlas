@@ -13,6 +13,8 @@ path you request.
 - Normal CLI commands make no network calls. Release installers, package
   managers, and GitHub Actions workflows may use the network to download or
   publish artifacts, but the `atlas` binary's map/diff/MCP operations are local.
+  For proxy, air-gapped, and internal-mirror installs, see
+  [install-offline.md](install-offline.md).
 
 If a future feature adds network access, this document and the README must be
 updated before that feature ships.
@@ -46,7 +48,9 @@ It may contain:
 
 Treat generated maps, JSON, XML, and diffs with the same care as other
 repository-derived artifacts. Do not paste or publish a map from a private repo
-unless you would also share its API surface and file layout.
+unless you would also share its API surface and file layout. When feeding a map
+to an AI agent, also treat it as *untrusted* input — see the
+[prompt-injection threat model](prompt-injection.md).
 
 ## Related docs
 
