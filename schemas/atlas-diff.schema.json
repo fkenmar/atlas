@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/fkenmar/atlas/blob/main/schemas/atlas-diff.schema.json",
+  "title": "atlas diff",
+  "description": "Output of `atlas diff --format json`. The `version` field tracks DIFF_SCHEMA_VERSION in src/render/diff.rs and is independent of the map's SCHEMA_VERSION (schemas/atlas-map.schema.json). This schema describes version 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "old", "new", "moved_files", "added_files", "removed_files", "changed_files", "skipped"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Diff schema version. The current released schema is 1.",
+      "minimum": 1
+    },
+    "old": {"type": "string", "description": "Label of the old/base tree (directory or git revision)."},
+    "new": {"type": "string", "description": "Label of the new/changed tree, or \"(working tree)\"."},
+    "moved_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["old", "new", "lang", "symbols"],
+        "properties": {
+          "old": {"type": "string"},
+          "new": {"type": "string"},
+          "lang": {"type": "string"},
+          "symbols": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "added_files": {"type": "array", "items": {"$ref": "#/$defs/fileSummary"}},
+    "removed_files": {"type": "array", "items": {"$ref": "#/$defs/fileSummary"}},
+    "changed_files": {"type": "array", "items": {"$ref": "#/$defs/fileDelta"}},
+    "skipped": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["old", "new"],
+      "properties": {
+        "old": {"$ref": "#/$defs/parseStats"},
+        "new": {"$ref": "#/$defs/parseStats"}
+      }
+    }
+  },
+  "$defs": {
+    "severity": {
+      "type": "string",
+      "description": "Change severity; `breaking` is what `atlas diff --exit-code` gates on.",
+      "enum": ["breaking", "notable", "informational", "internal"]
+    },
+    "parseStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skipped_files", "unwired_files"],
+      "properties": {
+        "skipped_files": {"type": "integer", "minimum": 0},
+        "unwired_files": {"type": "integer", "minimum": 0}
+      }
+    },
+    "fileSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "lang", "symbols", "severity"],
+      "properties": {
+        "path": {"type": "string"},
+        "lang": {"type": "string"},
+        "symbols": {"type": "integer", "minimum": 0},
+        "severity": {"$ref": "#/$defs/severity"}
+      }
+    },
+    "fileDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "changed", "kind_changed", "added", "removed", "added_imports", "removed_imports"],
+      "properties": {
+        "path": {"type": "string"},
+        "changed": {
+          "type": "array",
+          "description": "Symbols whose signature changed.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "name", "old_sig", "new_sig", "severity"],
+            "properties": {
+              "kind": {"type": "string"},
+              "name": {"type": "string"},
+              "old_sig": {"type": "string"},
+              "new_sig": {"type": "string"},
+              "severity": {"$ref": "#/$defs/severity"}
+            }
+          }
+        },
+        "kind_changed": {
+          "type": "array",
+          "description": "Symbols whose kind changed (e.g. function -> method).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "old_kind", "new_kind", "old_sig", "new_sig", "severity"],
+            "properties": {
+              "name": {"type": "string"},
+              "old_kind": {"type": "string"},
+              "new_kind": {"type": "string"},
+              "old_sig": {"type": "string"},
+              "new_sig": {"type": "string"},
+              "severity": {"$ref": "#/$defs/severity"}
+            }
+          }
+        },
+        "added": {"type": "array", "items": {"$ref": "#/$defs/symbolLine"}},
+        "removed": {"type": "array", "items": {"$ref": "#/$defs/symbolLine"}},
+        "added_imports": {"type": "array", "items": {"type": "string"}},
+        "removed_imports": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "symbolLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "sig", "severity"],
+      "properties": {
+        "kind": {"type": "string"},
+        "name": {"type": "string"},
+        "sig": {"type": "string"},
+        "severity": {"$ref": "#/$defs/severity"}
+      }
+    }
+  }
+}

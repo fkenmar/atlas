@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/fkenmar/atlas/blob/main/schemas/atlas-map.schema.json",
+  "title": "atlas map",
+  "description": "Output of `atlas --format json`. The `version` field tracks SCHEMA_VERSION in src/render/json.rs; additive fields bump it (and, pre-1.0, the crate minor) per CHANGELOG.md. This schema describes version 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "repo", "budget", "files", "collapsed", "symbol_index", "skipped_files", "unwired_files"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Schema version. The current released schema is 1.",
+      "minimum": 1
+    },
+    "repo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "loc", "files"],
+      "properties": {
+        "name": {"type": "string", "description": "Repository root directory name."},
+        "loc": {"type": "integer", "minimum": 0, "description": "Total lines of code across mapped files."},
+        "files": {"type": "integer", "minimum": 0, "description": "Total mapped source files."}
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "rendered", "detail"],
+      "properties": {
+        "target": {"type": "integer", "minimum": 1, "description": "Requested token budget (--budget)."},
+        "rendered": {"type": "integer", "minimum": 0, "description": "Actual rendered token count (exact BPE)."},
+        "detail": {
+          "type": "string",
+          "description": "Degradation rung the map settled on.",
+          "enum": ["full", "public-only", "public-only-params-elided"]
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "description": "Mapped files, ordered by rank (most central first).",
+      "items": {"$ref": "#/$defs/file"}
+    },
+    "collapsed": {
+      "type": "array",
+      "description": "Directories whose lowest-ranked files were collapsed to a count.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dir", "count"],
+        "properties": {
+          "dir": {"type": "string"},
+          "count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "symbol_index": {
+      "type": "array",
+      "description": "Compact index of navigable declarations from collapsed/degraded files (ADR 0004).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "kind", "path", "anchor", "line"],
+        "properties": {
+          "name": {"type": "string"},
+          "kind": {"$ref": "#/$defs/symbolKind"},
+          "path": {"type": "string"},
+          "anchor": {"type": "string", "description": "Stable anchor for progressive disclosure (ADR 0009)."},
+          "line": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "skipped_files": {"type": "integer", "minimum": 0, "description": "Files skipped (unparseable/unsupported), never fatal."},
+    "unwired_files": {"type": "integer", "minimum": 0, "description": "Parsed files with no resolved import edges."}
+  },
+  "$defs": {
+    "symbolKind": {
+      "type": "string",
+      "enum": ["function", "method", "class", "interface", "enum", "type", "constant", "module", "field"]
+    },
+    "visibility": {
+      "type": "string",
+      "enum": ["public", "private"]
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "lang", "rank", "score", "imported_by", "one_line", "omitted", "symbols", "imports", "used_by"],
+      "properties": {
+        "path": {"type": "string", "description": "Repo-root-relative, /-joined path."},
+        "lang": {"type": "string", "description": "Language name (python, typescript, rust, go, java, c, cpp)."},
+        "rank": {"type": "integer", "minimum": 1, "description": "1-based rank by centrality."},
+        "score": {"type": "number", "description": "PageRank score (6-decimal fixed precision)."},
+        "imported_by": {"type": "integer", "minimum": 0},
+        "one_line": {"type": "boolean", "description": "True when the file was collapsed to a single line under budget."},
+        "omitted": {"type": "integer", "minimum": 0, "description": "Count of symbols omitted from this file under budget."},
+        "symbols": {"type": "array", "items": {"$ref": "#/$defs/symbol"}},
+        "imports": {"type": "array", "items": {"type": "string"}, "description": "Resolved in-repo files this file imports."},
+        "used_by": {"type": "array", "items": {"type": "string"}, "description": "Resolved in-repo files that import this one."}
+      }
+    },
+    "symbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "sig", "line", "visibility"],
+      "properties": {
+        "kind": {"$ref": "#/$defs/symbolKind"},
+        "name": {"type": "string"},
+        "sig": {"type": "string", "description": "Signature only, never a function body."},
+        "line": {"type": "integer", "minimum": 1},
+        "visibility": {"$ref": "#/$defs/visibility"}
+      }
+    }
+  }
+}
