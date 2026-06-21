@@ -16,6 +16,18 @@ benchmark delta.
   unaffected. Verified cold==warm output and run-to-run determinism.
 
 ### Added
+- **Progressive disclosure: thin symbol index + on-demand expansion (#129, ADR 0009).**
+  The rung-3 symbol index now carries stable `relpath#name` anchors (`@line` only for
+  in-file duplicate names), and the MCP server gains two tools: `get_symbol_index`
+  returns a budgeted, signature-free index of those anchors, and `expand_symbol`
+  resolves one anchor to its full signature plus its defining file's one-hop neighbors
+  (the files it imports and the files that import it). An agent front-loads a thin index
+  and pulls detail only for the symbols it needs — cutting context-window *occupancy*,
+  the cost prompt-caching can't touch. Structural only: no symbol-level call graph.
+- **`atlas --check <FILE>`.** Verify a committed map is current instead of writing it:
+  regenerate the map and compare byte-for-byte, exiting `0` if identical, `1` if stale,
+  `2` on a usage error — for CI / pre-commit gating of a checked-in `atlas-map.md`
+  (like `rustfmt --check`). Mutually exclusive with `-o`/`--output`.
 - **Supported library API for embedding (#69).** `atlas::api::build_map(path,
   &MapOptions)` produces a `BudgetedMap` programmatically (discover → parse →
   link → rank → budget) for agent frameworks that embed atlas instead of shelling
