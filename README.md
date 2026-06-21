@@ -290,10 +290,19 @@ More answers in the [FAQ](docs/FAQ.md).
 
 Current release channel: **alpha**. The core works end-to-end and is
 benchmark-tested, but CLI flags, output shape, install paths, and docs may still
-change. Pin a version if you depend on the output. See
-[release readiness gates](docs/release-readiness.md) for the alpha/beta/stable
-criteria, [STATUS.md](STATUS.md) for current state, [CHANGELOG.md](CHANGELOG.md)
-for what's landed, and [docs/PRD.md](docs/PRD.md) for the full design.
+change. Pin a version if you depend on the output. See the
+[stability & deprecation policy](docs/stability.md) for exactly what's a stable
+contract pre-1.0 (the JSON/XML schemas) versus what may change (the Markdown
+map), [release readiness gates](docs/release-readiness.md) for the
+alpha/beta/stable criteria, [STATUS.md](STATUS.md) for current state,
+[CHANGELOG.md](CHANGELOG.md) for what's landed, and [docs/PRD.md](docs/PRD.md)
+for the full design.
+
+Building tooling on the output? `--format json` is a versioned contract with a
+machine-readable JSON Schema:
+[`schemas/atlas-map.schema.json`](schemas/atlas-map.schema.json) for the map and
+[`schemas/atlas-diff.schema.json`](schemas/atlas-diff.schema.json) for
+`atlas diff --format json`.
 
 `atlas diff <old> <new>` shows the structural delta between two trees — added/removed/changed signatures and import edges — so an agent sees what moved without re-reading the tree. Each side is a directory **or a git revision** (`atlas diff HEAD~1 HEAD`, `atlas diff v0.2.0 .`); revisions are checked out via `git` under the hood (no extra setup). Markdown by default; `--format json` or `xml` for tooling and CI.
 

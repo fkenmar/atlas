@@ -17,6 +17,8 @@ trying to do. New to atlas? Start with the [README](../README.md) and the
 - [Language support matrix](languages.md) — what's extracted per language, with caveats.
 - [`.atlasignore` & monorepo tuning](monorepos.md) — ignore syntax, `--focus`/`--lang`, big repos.
 - [Exit codes & error taxonomy](exit-codes.md) — the `0/1/2` contract for scripting.
+- [Stability & deprecation policy](stability.md) — what's a stable contract pre-1.0 vs what may change.
+- JSON Schemas: [map output](../schemas/atlas-map.schema.json) · [diff output](../schemas/atlas-diff.schema.json) — versioned contracts for `--format json`.
 - [Example gallery](../examples/gallery/) — real maps for Python / TypeScript / mixed repos.
 
 ## Using atlas with an AI agent
