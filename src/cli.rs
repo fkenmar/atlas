@@ -26,6 +26,7 @@ EXAMPLES:
   atlas . --for-agent          Add a short agent-facing Markdown preamble
   atlas . --timings            Print stage timings to stderr
   atlas diff HEAD~1 HEAD       Structural delta between two git revisions (or two dirs)
+  atlas doctor                 Diagnose install, detected languages, and cache
   atlas . > map.md             Save the map (e.g. to feed an agent)
   atlas --completions zsh      Print a shell completion script (bash/zsh/fish/…)
 
@@ -270,6 +271,19 @@ pub struct ExplainArgs {
     pub focus: Vec<String>,
 }
 
+/// `atlas doctor [PATH]` — install and repo-detection diagnostics (#47). Routed
+/// git-style; fast (discover only, no parse), safe for private repos.
+#[derive(Parser, Debug)]
+#[command(
+    name = "atlas doctor",
+    about = "Diagnose install and repo detection (version, languages, files, cache)"
+)]
+pub struct DoctorArgs {
+    /// Repository root to inspect (default: current directory).
+    #[arg(default_value = ".")]
+    pub path: PathBuf,
+}
+
 /// Entry point called from `main`. Exits the process with a status code.
 pub fn run() {
     // Git-style dispatch: `atlas diff <old> <new>` routes to the diff command
@@ -311,6 +325,16 @@ pub fn run() {
             std::iter::once("atlas explain".to_string()).chain(args.into_iter().skip(2)),
         );
         std::process::exit(match run_explain(explain) {
+            Ok(()) => 0,
+            Err(code) => code,
+        });
+    }
+    // `atlas doctor [PATH]` reports install + repo-detection diagnostics (#47).
+    if args.get(1).map(String::as_str) == Some("doctor") {
+        let doctor = DoctorArgs::parse_from(
+            std::iter::once("atlas doctor".to_string()).chain(args.into_iter().skip(2)),
+        );
+        std::process::exit(match run_doctor(doctor) {
             Ok(()) => 0,
             Err(code) => code,
         });
@@ -515,6 +539,75 @@ fn run_explain(args: ExplainArgs) -> Result<(), i32> {
             "not boosted"
         }
     );
+    Ok(())
+}
+
+/// `atlas doctor [PATH]` — report install + repo-detection diagnostics (#47):
+/// version, working dir, the binary's own path, supported languages, the source
+/// files discovered per language (or an actionable empty-map hint), and cache
+/// status. Discover-only (no parse), so it's fast and safe for private repos.
+/// Always exits 0 on a valid path; a bad path is the usual usage error (exit 2).
+fn run_doctor(args: DoctorArgs) -> Result<(), i32> {
+    println!("atlas doctor");
+    println!("  version:       {}", env!("CARGO_PKG_VERSION"));
+    match std::env::current_dir() {
+        Ok(cwd) => println!("  working dir:   {}", cwd.display()),
+        Err(_) => println!("  working dir:   (unavailable)"),
+    }
+    match std::env::current_exe() {
+        Ok(exe) => println!("  binary:        {}", exe.display()),
+        Err(_) => println!("  binary:        (unavailable)"),
+    }
+    println!("  supported:     {SUPPORTED_LANGUAGE_SUMMARY}");
+
+    let root = canonicalize_root(&args.path)?;
+    println!("  target path:   {}", root.display());
+
+    let files = crate::discover::discover(&root);
+    if files.is_empty() {
+        let hint = empty_map_hint(&root);
+        print!("  source files:  0 found — no supported source under this path.");
+        if let Some(exts) = &hint.extensions {
+            print!(" Detected: {exts}.");
+            if !hint.languages.is_empty() {
+                print!(" atlas does not support {} yet.", hint.languages.join(", "));
+            }
+        } else if hint.skipped_vendored {
+            print!(" Everything here is in an ignored/vendored directory — point atlas at the repo root.");
+        }
+        println!();
+        println!("                 (atlas maps {SUPPORTED_EXTENSION_SUMMARY})");
+    } else {
+        // Per-language counts, deterministically ordered by language name.
+        let mut by_lang: BTreeMap<&'static str, usize> = BTreeMap::new();
+        for src in &files {
+            *by_lang.entry(src.lang.name()).or_default() += 1;
+        }
+        println!("  source files:  {} found", files.len());
+        for (lang, count) in &by_lang {
+            println!("                   {lang}: {count}");
+        }
+    }
+
+    let cache = crate::cache::info(&root);
+    if cache.exists {
+        println!(
+            "  cache:         {} ({} bytes, {} entries, v{})",
+            cache.path.display(),
+            cache.size_bytes,
+            cache.entries,
+            cache.version
+        );
+    } else {
+        println!(
+            "  cache:         {} (absent — built on first run)",
+            cache.path.display()
+        );
+    }
+
+    println!();
+    println!("If `atlas` is not found in new shells, ensure its directory is on your PATH");
+    println!("(e.g. ~/.cargo/bin for `cargo install`). See the README install section.");
     Ok(())
 }
 
