@@ -11,6 +11,7 @@ function bodies in normal map output.
 ## Primary docs
 
 - [README](README.md): install, first run, CLI usage, agent workflows.
+- [Docs index](docs/README.md): every guide, grouped by task.
 - [Full agent index](llms-full.txt): expanded documentation map for agents.
 - [PRD](docs/PRD.md): product scope, requirements, risks, and non-goals.
 - [Changelog](CHANGELOG.md): user-facing changes by release.
@@ -19,11 +20,27 @@ function bodies in normal map output.
 - [Benchmark protocol](benchmark/README.md) and [history](benchmark/history.md):
   what benchmark claims are supported.
 - [Comparison guide](docs/comparison.md): positioning against adjacent tools.
-- [Claude Code MCP setup](docs/CLAUDE_CODE_MCP.md): using `atlas serve --mcp`.
 - [Security policy](SECURITY.md): supported versions and disclosure path.
 - [Privacy model](docs/PRIVACY.md): local operation, cache, and map sensitivity.
-- [Adoption metrics](docs/ADOPTION_METRICS.md): public-source metrics without
-  product telemetry.
+
+### Using atlas with an agent
+
+- [`atlas-orient` skill](skills/README.md): drop-in skill telling an agent to map
+  first; pasteable block in [examples/AGENTS.md](examples/AGENTS.md).
+- [Agent integration cookbook](docs/agent-cookbook.md): per-agent stdout/file
+  recipes and when to use `--focus`/`--budget`/`--lang`/`--format`.
+- [Claude Code MCP setup](docs/CLAUDE_CODE_MCP.md): using `atlas serve --mcp`.
+- [Prompt-injection threat model](docs/prompt-injection.md): treat maps as
+  untrusted data; Markdown vs XML.
+
+### Reference & tuning
+
+- [Language support matrix](docs/languages.md): extracted symbols, visibility,
+  import-linking, caveats per language.
+- [`.atlasignore` & monorepo tuning](docs/monorepos.md): ignore rules, focusing
+  large/polyglot repos.
+- [Exit codes](docs/exit-codes.md): the stable `0/1/2` contract for scripting/CI.
+- [FAQ](docs/FAQ.md): common product/workflow questions.
 
 ## Common commands
 
@@ -33,6 +50,7 @@ atlas . --focus src/auth --focus src/api
 atlas . --format json
 atlas . --format xml
 atlas . --for-agent -o atlas-map.md
+atlas . --check ATLAS.md            # exit 1 if a committed map is stale (CI/pre-commit)
 atlas diff HEAD~1 HEAD
 atlas serve --mcp --root .
 ```
