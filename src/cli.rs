@@ -17,6 +17,7 @@ const EXAMPLES: &str = "\
 EXAMPLES:
   atlas .                      Map the current folder (default 2,048-token budget)
   atlas . --budget 4096        Give the map a larger token budget
+  atlas . --preset large       Use a named budget preset (small|default|large|review)
   atlas src --focus src/auth   Rank files under src/auth higher
   atlas . --no-private         Public API surface only
   atlas . --format json        Emit JSON instead of Markdown
@@ -74,8 +75,13 @@ pub struct Cli {
     pub path: PathBuf,
 
     /// Token budget for the map.
-    #[arg(short, long, default_value_t = DEFAULT_BUDGET, value_name = "N")]
+    #[arg(short, long, default_value_t = DEFAULT_BUDGET, value_name = "N", conflicts_with = "preset")]
     pub budget: usize,
+
+    /// Budget preset instead of a raw number: small (~1k), default (2k),
+    /// large (~4k), or review (~8k). Mutually exclusive with --budget.
+    #[arg(long, value_enum, value_name = "NAME")]
+    pub preset: Option<BudgetPreset>,
 
     /// Output format: md (default), json, or xml.
     #[arg(short, long, value_enum, default_value_t = Format::Md)]
@@ -142,6 +148,33 @@ pub enum Format {
     Json,
     /// Well-formed XML for prompt-injection-safe wrapping in Claude prompts.
     Xml,
+}
+
+/// Named budget presets — a convenience over remembering token counts. Each maps
+/// to an explicit `--budget` value (the source of truth for reproducibility);
+/// `--preset` and `--budget` are mutually exclusive.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BudgetPreset {
+    /// ~1,024 tokens — a tight map for small repos or a quick glance.
+    Small,
+    /// 2,048 tokens — the standard whole-repo map (same as the default).
+    Default,
+    /// ~4,096 tokens — more detail for larger repos or deeper context windows.
+    Large,
+    /// ~8,192 tokens — a wide map for code review / multi-site edit sessions.
+    Review,
+}
+
+impl BudgetPreset {
+    /// The explicit token budget this preset stands in for.
+    pub fn tokens(self) -> usize {
+        match self {
+            BudgetPreset::Small => 1024,
+            BudgetPreset::Default => DEFAULT_BUDGET,
+            BudgetPreset::Large => 4096,
+            BudgetPreset::Review => 8192,
+        }
+    }
 }
 
 /// `atlas diff <old> [new]` — structural delta between two trees (ADR 0005).
@@ -604,7 +637,10 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         return Ok(());
     }
 
-    if cli.budget == 0 {
+    // A --preset stands in for an explicit --budget (they're mutually exclusive);
+    // resolve to the effective budget once, here.
+    let budget = cli.preset.map(BudgetPreset::tokens).unwrap_or(cli.budget);
+    if budget == 0 {
         eprintln!("atlas: --budget must be at least 1 token (the default is {DEFAULT_BUDGET})");
         return Err(2);
     }
@@ -726,7 +762,7 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         1
     })?;
     let opts = BudgetOptions {
-        budget_tokens: cli.budget,
+        budget_tokens: budget,
         no_private: cli.no_private,
     };
     let map = crate::budget::pack(
@@ -1250,6 +1286,28 @@ mod tests {
         assert_eq!(parse(&["atlas", "--format", "md"]).format, Format::Md);
         assert_eq!(parse(&["atlas", "--format", "xml"]).format, Format::Xml);
         assert!(Cli::try_parse_from(["atlas", "--format", "bogus"]).is_err());
+    }
+
+    #[test]
+    fn preset_parses_and_maps_to_budget() {
+        assert!(parse(&["atlas"]).preset.is_none());
+        assert_eq!(
+            parse(&["atlas", "--preset", "large"]).preset,
+            Some(BudgetPreset::Large)
+        );
+        // Each preset stands in for an explicit budget.
+        assert_eq!(BudgetPreset::Small.tokens(), 1024);
+        assert_eq!(BudgetPreset::Default.tokens(), DEFAULT_BUDGET);
+        assert_eq!(BudgetPreset::Large.tokens(), 4096);
+        assert_eq!(BudgetPreset::Review.tokens(), 8192);
+    }
+
+    #[test]
+    fn preset_and_budget_are_mutually_exclusive() {
+        assert!(Cli::try_parse_from(["atlas", "--budget", "1000", "--preset", "small"]).is_err());
+        // Either one alone is fine.
+        assert!(Cli::try_parse_from(["atlas", "--preset", "small"]).is_ok());
+        assert!(Cli::try_parse_from(["atlas", "--budget", "1000"]).is_ok());
     }
 
     #[test]

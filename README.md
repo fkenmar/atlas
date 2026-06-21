@@ -153,6 +153,7 @@ error lists the file extensions it saw). Head to the full [usage](#use) and
 ```
 atlas .                          # map the current folder (2,048-token budget)
 atlas . --budget 4096            # give it a bigger budget
+atlas . --preset large           # or a named preset: small|default|large|review
 atlas . --focus src/auth         # rank the files you're working on higher
 atlas . --lang py,rs             # only these languages
 atlas . --no-private             # public API surface only

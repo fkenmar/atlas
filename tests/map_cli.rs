@@ -231,6 +231,21 @@ fn lang_matching_no_files_is_operational_error() {
 }
 
 #[test]
+fn preset_sets_the_budget_in_the_header() {
+    // `--preset small` should drive the effective budget to 1024 (#104).
+    let repo = write_python_repo("preset");
+    let output = run_atlas(&[repo.to_str().unwrap(), "--preset", "small"]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).expect("utf-8 stdout");
+    assert!(stdout.contains("budget 1024"), "{stdout}");
+    let _ = fs::remove_dir_all(repo);
+}
+
+#[test]
 fn empty_map_names_unsupported_language() {
     // A repo of only Ruby files: the diagnostic should list .rb and name Ruby as
     // unsupported, so the user knows it's a language gap, not a wrong root (#75).
