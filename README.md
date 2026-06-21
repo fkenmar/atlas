@@ -38,6 +38,14 @@ When an AI coding agent works in your repo, it spends most of its effort just fi
 
 In our benchmark, agents given an atlas map answered structural questions about a codebase using **~65% fewer tokens at identical accuracy** (20/20 correct *with* and *without* the map — 85,670 → 29,781 tokens) — typically resolving in a **single turn instead of three**. On open-ended edit tasks the map cuts turns too, though token savings there vary by task. These are numbers you can [reproduce yourself](benchmark/README.md#reproduce-the-headline-number) — the harness and the 20 verified questions are in the repo.
 
+| Structural-comprehension benchmark | Without map | With atlas | Δ |
+|---|:--:|:--:|:--:|
+| Tokens to answer | 85,670 | 29,781 | **−65.2%** |
+| Turns to answer (median) | 3 | 1 | **−2 turns** |
+| Accuracy | 20 / 20 | 20 / 20 | **0 regressions** |
+
+<sub>20 verified structural questions · claude-sonnet-4-6 · 3 runs/arm · [pytest 8.2.0](https://github.com/pytest-dev/pytest) (92k LOC) · default 2,048-token map · read-only both arms. Edit-task token deltas are high-variance, so we headline only the stable, accuracy-gated signal.</sub>
+
 ## What it looks like
 
 Run `atlas src --budget 600` on this repo and it prints:
