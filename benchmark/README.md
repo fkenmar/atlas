@@ -95,6 +95,17 @@ Token and turn savings are worthless if the map makes agents **faster but wronge
 - **The bar (hard gate in the self-improvement loop):** with-map accuracy ≥ without-map accuracy. An accuracy drop is a regression that no token win can buy back. Ideally the map *improves* accuracy — it puts the answer's location in context.
 - When the change is map content or rendering (extraction, ranking, budgeting, render), the loop runs this alongside the edit-task benchmark; competitor arms (below) apply here too once M1 lands.
 
+### Coverage proxy — the free inner loop (`coverage.py`)
+
+`comprehension.sh` is billed (one `claude -p` session per question per arm), so it can't run on every ranking tweak. `coverage.py` is its **deterministic, zero-cost proxy**: for each question it checks whether the answer key (`expect`, scored by the same `any`/`all` rule) appears in the atlas map itself — "is the answer in the map?" The comprehension runs established that an answer in the map ⇒ a one-turn correct answer, so coverage tracks the accuracy axis without an LLM.
+
+```
+python3 benchmark/coverage.py --budget 2048,3072          # full set, sweep budgets
+python3 benchmark/coverage.py comprehension/questions-smoke.yaml -v
+```
+
+It reproduces the recorded numbers exactly — **12/20 @ 2048, 17/20 @ 3072** (matching the symbol-index result) — in milliseconds. Use it as the fast inner loop when tuning ranking/budgeting (e.g. per-symbol ranking): keep what raises coverage, then confirm the keep/revert at a milestone with the billed `comprehension.sh`. It does **not** replace the billed run — an answer present in the map could still be misread — it makes the iteration *between* runs cheap and objective.
+
 ## Competitive arms — the next protocol step (post-M1)
 
 Beating our own no-map baseline is necessary but not sufficient: repomap has to beat the **existing alternatives** (PRD §12) on the same task suite, same protocol, same model. Once the M1 budgeted map exists, each competitor becomes one more arm per task — the injection mechanism is identical (context prepended at session start), only the artifact changes:
