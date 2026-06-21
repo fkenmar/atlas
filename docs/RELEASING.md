@@ -46,6 +46,58 @@ token claim without a result that clears the variance gate in
 [`benchmark/README.md`](../benchmark/README.md) (the launch checklist enforces
 this).
 
+## Publishing to crates.io (#37) — prepared & verified
+
+A crates.io listing is its own discovery surface and unblocks awesome-rust
+acceptance. The crate is technically publish-ready (`cargo publish --dry-run`
+packages and verifies clean — 104 files), with **one naming decision** to make
+first:
+
+**The name `atlas` is taken on crates.io** (an unrelated texture-atlas crate,
+currently 0.3.0) — exactly the situation that led to the PyPI name `atlas-map`.
+The consistent fix is to publish the *crate* as `atlas-map` while keeping the
+library and binary named `atlas`, so `use atlas::…` and the `atlas` command don't
+change. Verified working (`cargo build`, `cargo test`, and `--dry-run` all pass)
+with this `Cargo.toml`:
+
+```toml
+[package]
+name = "atlas-map"   # crates.io name; bare `atlas` is taken
+
+[lib]
+name = "atlas"       # keeps `use atlas::…` and CARGO_BIN_EXE_atlas
+path = "src/lib.rs"
+
+[[bin]]
+name = "atlas"       # keeps the installed command as `atlas`
+path = "src/main.rs"
+```
+
+**⚠️ Decide this before applying — it ripples into releases:** cargo-dist names
+release artifacts after the *package*, so renaming to `atlas-map` would turn
+`atlas-installer.sh` / `atlas-<target>.zip` into `atlas-map-installer.sh` /
+`atlas-map-<target>.zip`, **breaking the README install URLs.** Options:
+
+1. Accept the rename: regenerate `release.yml` with `dist generate`, update the
+   README install commands/URLs, and keep the old v0.2.1 release URLs intact (the
+   pre-rename installer keeps working for that tag).
+2. Keep the dist "app name" as `atlas` if your dist config supports overriding it,
+   so only the crates.io name differs — confirm against the current cargo-dist
+   docs before relying on it.
+
+**Publish steps once the name is settled** (needs the maintainer's crates.io
+token — `cargo login`):
+
+```sh
+cargo publish --dry-run    # final check
+cargo publish              # the real thing
+```
+
+Then update the README "From source" block to `cargo install atlas-map`, add a
+crates.io badge, and mark [#37](https://github.com/fkenmar/atlas/issues/37) done.
+The `Cargo.toml` snippet above is not committed — it's a verified, ready-to-apply
+change awaiting the artifact-naming decision.
+
 ## Pre-release checklist
 
 The full gate lives in [`LAUNCH_CHECKLIST.md`](LAUNCH_CHECKLIST.md). The
