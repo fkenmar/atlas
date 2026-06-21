@@ -17,11 +17,25 @@ since directories pull from them.
 
 - **Description:**
   `Compile a codebase into a token-budgeted structural map for AI coding agents — same answers, ~65% fewer tokens. Rust CLI + MCP server.`
-- **Homepage:** the docs landing page or the latest release URL (unset is fine
-  for now).
+- **Homepage:** once GitHub Pages is enabled (below), set this to
+  `https://fkenmar.github.io/atlas/`. Until then, the latest release URL is fine.
 - **Topics:** `ai-agents`, `coding-agents`, `llm`, `mcp`, `claude`, `code-map`,
   `repo-map`, `tree-sitter`, `rust`, `cli`, `developer-tools`, `static-analysis`,
   `tokens`, `context-engineering`.
+
+### Landing page (GitHub Pages)
+
+A ready-to-serve landing page lives at [`index.html`](index.html) (with
+`.nojekyll`). To publish it: **Settings → Pages → Source: Deploy from a branch →
+`main` / `/docs`**. It comes live at `https://fkenmar.github.io/atlas/` — then set
+that as the repo **Homepage** (above). The page leads with the reproducible
+benchmark number and links back into the repo; share it as the one-click intro.
+
+### Ready-to-open submissions
+
+Paste-ready PR/forms for the first three targets are prepped in
+[`submission-drafts.md`](submission-drafts.md) — open them in a couple of minutes
+each.
 
 ## Reusable blurbs
 

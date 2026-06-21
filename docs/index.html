@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>atlas — a token-budgeted repo map for AI coding agents</title>
+  <meta name="description" content="atlas compiles a codebase into a compact, ranked, token-budgeted structural map for AI coding agents. Same answers, ~65% fewer tokens. Rust CLI + MCP server.">
+
+  <!-- Open Graph / social cards -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="atlas — a token-budgeted repo map for AI coding agents">
+  <meta property="og:description" content="Same answers, ~65% fewer tokens. A ranked, structural map your AI coding agent reads in one shot.">
+  <meta property="og:image" content="https://raw.githubusercontent.com/fkenmar/atlas/main/assets/social-preview.png">
+  <meta property="og:url" content="https://github.com/fkenmar/atlas">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <style>
+    :root {
+      --ink: #1c1c28; --muted: #5a5a6e; --accent: #4F46E5; --amber: #F59E0B;
+      --bg: #ffffff; --soft: #f6f6fb; --line: #e6e6ef; --code: #0f1020;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink:#ececf5; --muted:#a6a6bd; --bg:#0f1020; --soft:#17182b; --line:#26273f; --code:#06060f; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+           color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 0 22px; }
+    header { text-align: center; padding: 64px 0 8px; }
+    header img.logo { width: 92px; height: 92px; }
+    h1 { font-size: 2.6rem; margin: 14px 0 6px; letter-spacing: -0.02em; }
+    .tagline { font-size: 1.3rem; color: var(--ink); max-width: 640px; margin: 0 auto 6px; }
+    .tagline b { color: var(--accent); }
+    .sub { color: var(--muted); margin: 6px auto 26px; max-width: 620px; }
+    .cta { display:flex; gap: 12px; justify-content:center; flex-wrap: wrap; margin-bottom: 10px; }
+    .btn { display:inline-block; padding: 12px 22px; border-radius: 10px; font-weight: 600; text-decoration:none; border:1px solid var(--line); }
+    .btn.primary { background: var(--accent); color:#fff; border-color: var(--accent); }
+    .btn.ghost { color: var(--ink); background: var(--soft); }
+    .badges { margin: 18px 0 8px; }
+    .badges img { height: 20px; margin: 0 3px; vertical-align: middle; }
+    .demo { margin: 30px auto; text-align:center; }
+    .demo img { width: 100%; max-width: 820px; border-radius: 12px; border:1px solid var(--line); }
+    .stat { background: var(--soft); border:1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin: 34px 0; }
+    .stat .big { font-size: 1.5rem; font-weight: 700; }
+    .stat .big span { color: var(--amber); }
+    .stat .note { color: var(--muted); font-size: .94rem; margin-top: 6px; }
+    h2 { font-size: 1.45rem; margin: 40px 0 12px; letter-spacing: -0.01em; }
+    pre { background: var(--code); color: #e8e8f5; padding: 16px 18px; border-radius: 10px; overflow:auto; font-size: .92rem; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    ul.feats { padding-left: 1.1em; }
+    ul.feats li { margin: 6px 0; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr)); gap: 14px; margin: 14px 0; }
+    .card { border:1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--soft); }
+    .card a { color: var(--accent); text-decoration:none; font-weight:600; }
+    footer { color: var(--muted); text-align:center; padding: 40px 0 56px; font-size:.92rem; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img class="logo" src="https://raw.githubusercontent.com/fkenmar/atlas/main/assets/atlas-logo.svg" alt="atlas logo">
+      <h1>atlas</h1>
+      <p class="tagline"><b>Same answers, ~65% fewer tokens.</b></p>
+      <p class="sub">atlas compiles your repo into a compact, ranked, token-budgeted structural map your AI coding agent reads in one shot — every signature, type, and import edge, no function bodies — so it stops burning context just to find its way around.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/fkenmar/atlas">View on GitHub</a>
+        <a class="btn ghost" href="https://github.com/fkenmar/atlas#install">Install</a>
+      </div>
+      <div class="badges">
+        <img src="https://img.shields.io/badge/license-MIT-4F46E5?style=flat-square" alt="MIT">
+        <img src="https://img.shields.io/badge/built%20with-Rust-DEA584?style=flat-square&logo=rust&logoColor=white" alt="Rust">
+        <img src="https://img.shields.io/badge/languages-Py%20%C2%B7%20TS%20%C2%B7%20Rust%20%C2%B7%20Go%20%C2%B7%20Java%20%C2%B7%20C%2FC%2B%2B-F59E0B?style=flat-square" alt="Languages">
+      </div>
+    </header>
+
+    <div class="demo">
+      <img src="https://raw.githubusercontent.com/fkenmar/atlas/main/assets/atlas-demo.gif" alt="atlas demo: map a repo, focus a file to rerank it, and save the map for your agent">
+    </div>
+
+    <div class="stat">
+      <div class="big">20/20 accuracy, <span>−65% tokens</span>, 1 turn instead of 3.</div>
+      <div class="note">In a comprehension benchmark (20 verified questions on a real repo), agents answered with identical accuracy using ~65% fewer tokens (85,670 → 29,781). Honest caveat: on open-ended edit tasks the token numbers are too noisy to claim — we don't headline what we can't measure. <a href="https://github.com/fkenmar/atlas/blob/main/benchmark/README.md#reproduce-the-headline-number">Reproduce it yourself →</a></div>
+    </div>
+
+    <h2>Try it in 30 seconds</h2>
+    <pre><code>pipx install --pre atlas-map     # or: pip install --pre atlas-map
+cd path/to/your/project
+atlas .                          # ranked, ~2,000-token map to stdout
+atlas . -o atlas-map.md          # save it for your agent</code></pre>
+
+    <h2>Why it works</h2>
+    <ul class="feats">
+      <li><b>Structure only.</b> Signatures, types, and imports — never function bodies. A fraction of the source.</li>
+      <li><b>Ranked &amp; budgeted.</b> PageRank over the import graph, packed to a token budget, so the map stays small enough to live in context every turn.</li>
+      <li><b>Local &amp; offline.</b> No network calls, no telemetry, deterministic output.</li>
+      <li><b>Fits any agent.</b> Markdown / JSON / XML to stdout or a file, a structural <code>diff</code> mode, and a read-only MCP server.</li>
+    </ul>
+
+    <h2>Dig deeper</h2>
+    <div class="grid">
+      <div class="card"><a href="https://github.com/fkenmar/atlas#readme">README &amp; quickstart →</a><div class="note">Install, usage, and the full flag set.</div></div>
+      <div class="card"><a href="https://github.com/fkenmar/atlas/blob/main/docs/agent-cookbook.md">Agent cookbook →</a><div class="note">Recipes for Claude Code, Cursor, Copilot, and terminal agents.</div></div>
+      <div class="card"><a href="https://github.com/fkenmar/atlas/blob/main/docs/languages.md">Language matrix →</a><div class="note">What's extracted per language, with caveats.</div></div>
+      <div class="card"><a href="https://github.com/fkenmar/atlas/blob/main/benchmark/README.md">Benchmark →</a><div class="note">The protocol, and how to reproduce the number.</div></div>
+    </div>
+
+    <footer>
+      Alpha — the core works and is benchmark-tested, but the CLI and output may still change.
+      <br>MIT © Kenmar · <a href="https://github.com/fkenmar/atlas">github.com/fkenmar/atlas</a>
+    </footer>
+  </div>
+</body>
+</html>
