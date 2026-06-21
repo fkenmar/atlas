@@ -234,7 +234,11 @@ Agent documentation entry points live in [`llms.txt`](llms.txt) and
 [`llms-full.txt`](llms-full.txt). They point agents at the README, benchmark
 history, [comparison guide](docs/comparison.md), [security policy](SECURITY.md),
 PRD, changelog, and MCP setup docs without turning the README into a doc index.
+The full, browsable index of every guide is [`docs/README.md`](docs/README.md).
 
+Want your agent to map first automatically? The [`atlas-orient` skill](skills/README.md)
+is a drop-in skill (Claude Code, Cursor, Codex, …) — or paste the ready-made
+block from [`examples/AGENTS.md`](examples/AGENTS.md) into your agent's rules.
 For Claude Code and other MCP-compatible clients, see
 [`docs/CLAUDE_CODE_MCP.md`](docs/CLAUDE_CODE_MCP.md) and the reusable
 [`examples/claude-code.mcp.json`](examples/claude-code.mcp.json) config.

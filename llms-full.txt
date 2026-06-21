@@ -23,12 +23,41 @@ and C++.
 ## Start here
 
 - [README](README.md): installation, quickstart, examples, troubleshooting.
+- [Docs index](docs/README.md): every guide, grouped by task.
 - [CONTRIBUTING](CONTRIBUTING.md): local build/test commands and contribution
   expectations.
 - [CLAUDE](CLAUDE.md): maintainer workflow rules for agents working in this
   repository.
 - [STATUS](STATUS.md): current milestone notes and completed work.
 - [CHANGELOG](CHANGELOG.md): public release notes and unreleased changes.
+
+## Using atlas with an agent
+
+- [`atlas-orient` skill](skills/README.md): a drop-in skill that tells an agent to
+  orient with a map before exploring; ready-to-paste block in
+  [examples/AGENTS.md](examples/AGENTS.md).
+- [Agent integration cookbook](docs/agent-cookbook.md): per-agent stdout/file
+  recipes (Claude Code, Cursor, Copilot, terminal agents) and flag guidance.
+- [Generate CLAUDE.md / AGENTS.md sections](docs/agent-files.md): keep a delimited
+  map block fresh without touching manual guidance.
+- [Editor task snippets](docs/editor-snippets.md): VS Code / JetBrains / shell.
+- [Claude Code MCP setup](docs/CLAUDE_CODE_MCP.md) and
+  [examples/claude-code.mcp.json](examples/claude-code.mcp.json).
+- [Prompt-injection threat model](docs/prompt-injection.md): maps are untrusted
+  data; Markdown vs XML and safe wrappers.
+
+## Reference & tuning
+
+- [Language support matrix](docs/languages.md): extracted symbol kinds,
+  visibility rules, import-linking behavior, and caveats per language.
+- [`.atlasignore` & monorepo tuning](docs/monorepos.md): ignore syntax and
+  focusing large/polyglot repos.
+- [Exit codes & error taxonomy](docs/exit-codes.md): the stable `0/1/2` contract.
+- [FAQ](docs/FAQ.md), [Windows guide](docs/windows.md),
+  [offline/proxy install](docs/install-offline.md),
+  [repomap → atlas migration](docs/MIGRATION.md).
+- Keep a committed map fresh: [pre-commit hook](docs/pre-commit.md),
+  [CI recipes](docs/ci-recipes.md), [API-change gate](docs/ci-diff-gate.md).
 
 ## Product and architecture
 
@@ -42,6 +71,8 @@ and C++.
 - [ADR 0005](docs/adr/0005-structural-diff-between-trees.md): structural diff
   design.
 - [ADR 0008](docs/adr/0008-mcp-server-over-stdio.md): MCP server over stdio.
+- [ADR 0009](docs/adr/0009-stable-symbol-anchors-progressive-disclosure.md):
+  stable symbol anchors for progressive disclosure.
 
 ## Agent workflows
 
@@ -68,6 +99,12 @@ Use structured output:
 ```sh
 atlas . --format json
 atlas . --format xml
+```
+
+Gate a committed map's freshness (exit 1 if stale — CI / pre-commit):
+
+```sh
+atlas . --check ATLAS.md
 ```
 
 Review structural change between revisions:
