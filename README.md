@@ -56,7 +56,7 @@ used by: parse.rs
 
 Files are ordered by importance (a PageRank over the import graph), `#1` being the most central. Each file shows its public symbols, what it imports, and what depends on it — everything an agent needs to navigate, nothing it doesn't. The header reports the budget and the actual `rendered` token count.
 
-**What it maps:** Python (`.py`, `.pyi`), TypeScript/JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, …), Rust (`.rs`), Go (`.go`), Java (`.java`), and C/C++ (`.c`, `.h`, `.cpp`, `.hpp`, …). It honors your `.gitignore` and an optional `.atlasignore`, and always skips hidden directories and common vendored/build folders (`node_modules`, `target`, `dist`, `build`, `venv`, `__pycache__`, `vendor`, …). If a file you expected isn't there, it's almost always an unsupported language or a skipped directory.
+**What it maps:** Python (`.py`, `.pyi`), TypeScript/JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, …), Rust (`.rs`), Go (`.go`), Java (`.java`), and C/C++ (`.c`, `.h`, `.cpp`, `.hpp`, …). It honors your `.gitignore` and an optional `.atlasignore`, and always skips hidden directories and common vendored/build folders (`node_modules`, `target`, `dist`, `build`, `venv`, `__pycache__`, `vendor`, …). If a file you expected isn't there, it's almost always an unsupported language or a skipped directory. For exactly what's extracted per language — symbol kinds, visibility rules, import-linking behavior, and caveats — see the [language support matrix](docs/languages.md).
 
 ---
 
@@ -76,7 +76,7 @@ atlas is a Rust binary, not a Python package — the wheel just drops the native
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fkenmar/atlas/releases/download/v0.2.1-alpha/atlas-installer.sh | sh
 ```
 
-On Windows, grab `atlas-x86_64-pc-windows-msvc.zip` from the [releases page](https://github.com/fkenmar/atlas/releases). Binaries for all platforms (x64 + arm64) are attached to every release by [cargo-dist](https://opensource.axo.dev/cargo-dist/).
+On Windows, grab `atlas-x86_64-pc-windows-msvc.zip` from the [releases page](https://github.com/fkenmar/atlas/releases). Binaries for all platforms (x64 + arm64) are attached to every release by [cargo-dist](https://opensource.axo.dev/cargo-dist/). For Windows-specific `PATH`, PowerShell, and completion setup, see the [Windows guide](docs/windows.md).
 
 **From source** — any platform, needs [Rust](https://rustup.rs):
 
@@ -215,6 +215,7 @@ Sourcegraph/SCIP, and concat-style repo packers, see
 - **Too much noise, or a missing file in a big repo.** Tune what atlas maps with `.atlasignore`, `--focus`, `--lang`, or by mapping a subdirectory — see [`docs/monorepos.md`](docs/monorepos.md).
 - **Scripting atlas in CI.** The exit codes are a stable contract (`0` success, `1` operational error, `2` usage error) — see [`docs/exit-codes.md`](docs/exit-codes.md).
 - **Old `repomap` names or files** (`.repomapignore`, `.repomap/`, `REPOMAP.md`). atlas doesn't read them — see the [migration guide](docs/MIGRATION.md).
+- **On Windows** — `PATH`, PowerShell, execution policy, and completions are covered in the [Windows guide](docs/windows.md).
 
 More answers in the [FAQ](docs/FAQ.md).
 

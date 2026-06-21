@@ -9,7 +9,7 @@
 - [ ] `cargo test` green
 - [ ] Determinism preserved (sorted iteration; no `HashMap`-order reliance)
 - [ ] No new `.unwrap()` / `.expect()` outside tests
-- [ ] New dependency? Flagged for maintainer approval
+- [ ] New dependency? Approved by a maintainer, and justified below against the [dependency policy](../CONTRIBUTING.md#dependencies)
 - [ ] Ranking/budgeting change? Benchmark delta noted below
 
 ## Benchmark delta
