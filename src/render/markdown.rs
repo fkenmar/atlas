@@ -99,18 +99,28 @@ pub fn render(map: &BudgetedMap) -> String {
     if !map.symbol_index.is_empty() {
         out.push('\n');
         out.push_str(
-            "---\nsymbol index (other defined symbols — anchors only; \
-             expand an anchor for full signature):\n",
+            "---\nsymbol index (PARTIAL — more symbols by file, not exhaustive; if the \
+             symbol you need isn't listed here, grep the source instead of guessing. \
+             Anchor = `path#name`; expand it for the full signature):\n",
         );
         let mut i = 0;
         while i < map.symbol_index.len() {
             let rel = &map.symbol_index[i].rel;
-            let mut anchors: Vec<&str> = Vec::new();
+            let mut names: Vec<&str> = Vec::new();
             while i < map.symbol_index.len() && &map.symbol_index[i].rel == rel {
-                anchors.push(map.symbol_index[i].anchor.as_str());
+                // Show the bare name (or `name@line`): the path is already the line
+                // prefix, so repeating it inside every anchor is pure token bloat
+                // (it halved the comprehension win, 65% -> 30%). The anchor stays
+                // derivable as `path#name` for expand_symbol.
+                let anchor = map.symbol_index[i].anchor.as_str();
+                let display = anchor
+                    .strip_prefix(rel.as_str())
+                    .and_then(|s| s.strip_prefix('#'))
+                    .unwrap_or(anchor);
+                names.push(display);
                 i += 1;
             }
-            let _ = writeln!(out, "{rel}: {}", anchors.join(", "));
+            let _ = writeln!(out, "{rel}: {}", names.join(", "));
         }
     }
 
