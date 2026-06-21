@@ -20,7 +20,8 @@
   <a href="#use-it-with-your-ai-agent"><b>Use it with your agent</b></a> ·
   <a href="#docs-for-agents"><b>Docs for agents</b></a> ·
   <a href="#why-it-works"><b>Why it works</b></a> ·
-  <a href="#troubleshooting"><b>Troubleshooting</b></a>
+  <a href="#troubleshooting"><b>Troubleshooting</b></a> ·
+  <a href="docs/FAQ.md"><b>FAQ</b></a>
 </sub>
 
 <br>
@@ -211,6 +212,11 @@ Sourcegraph/SCIP, and concat-style repo packers, see
 - **Empty map / "0 files".** atlas found no supported source under that path. Check the language is one it maps (Python, TS/JS, Rust, Go, Java, C/C++) and that you're pointing at the project root — not a single file, and not a vendored or ignored directory. The error includes the top file extensions atlas saw to make wrong-root or unsupported-language cases easier to spot.
 - **`command not found: atlas`.** `~/.cargo/bin` isn't on your `PATH`. Add it (rustup's installer normally does), or run the binary by its full path.
 - **A symbol is wrong or missing.** That's usually a tree-sitter extraction bug — please [open an issue](https://github.com/fkenmar/atlas/issues/new?template=extraction_bug.md) with a minimal snippet that reproduces it.
+- **Too much noise, or a missing file in a big repo.** Tune what atlas maps with `.atlasignore`, `--focus`, `--lang`, or by mapping a subdirectory — see [`docs/monorepos.md`](docs/monorepos.md).
+- **Scripting atlas in CI.** The exit codes are a stable contract (`0` success, `1` operational error, `2` usage error) — see [`docs/exit-codes.md`](docs/exit-codes.md).
+- **Old `repomap` names or files** (`.repomapignore`, `.repomap/`, `REPOMAP.md`). atlas doesn't read them — see the [migration guide](docs/MIGRATION.md).
+
+More answers in the [FAQ](docs/FAQ.md).
 
 ---
 

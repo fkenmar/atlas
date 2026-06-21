@@ -1,19 +1,23 @@
-# repomap
+# atlas
 
 Standalone Rust CLI that compiles a codebase into a token-budgeted structural map for LLM coding agents: every signature, type, export, and import edge — zero function bodies — packed into ~2k tokens by graph ranking. Full spec: docs/PRD.md. Development is benchmark-driven and milestone-gated; the agent-task benchmark (benchmark/README.md) is the arbiter of all ranking/budgeting changes.
+
+(The project was originally named `repomap`; the crate, binary, repo, ignore file, and cache dir are all `atlas`/`.atlas` now. See docs/MIGRATION.md if you hit a repomap-era name or artifact.)
 
 ## Pipeline (one stage = one module)
 
 | Stage | What it does | Owner |
 |---|---|---|
-| discover | walk tree; .gitignore, .repomapignore, vendored defaults | src/discover.rs |
+| discover | walk tree; .gitignore, .atlasignore, vendored defaults | src/discover.rs |
 | parse | tree-sitter per file; extract declarations via queries/<lang>/tags.scm | src/parse.rs + src/lang/ |
 | link | imports + defs↔refs into a directed file/symbol graph | src/link.rs |
 | rank | personalized PageRank; --focus seeds the personalization vector | src/rank.rs |
 | budget | greedy pack to N tokens; degradation ladder; exact BPE counts | src/budget.rs |
 | render | markdown / json / xml; deterministic output | src/render/ |
 
-src/cache.rs sits under parse: content-hash keyed, bincode, `.repomap/cache`. src/cli.rs drives the stages.
+src/cache.rs sits under parse: content-hash keyed, bincode, `.atlas/cache`. src/cli.rs drives the stages.
+
+Beyond the map pipeline, the same parse output backs three more commands: `atlas diff` (src/diff.rs, src/render/diff.rs — structural delta between two trees/git revisions), `atlas serve --mcp` (src/mcp.rs + src/api.rs — stdio JSON-RPC MCP server), and `atlas cache info|clean` / `atlas explain` (src/cli.rs). The CLI exit-code contract is documented in docs/exit-codes.md.
 
 ## Conventions
 
@@ -36,7 +40,7 @@ src/cache.rs sits under parse: content-hash keyed, bincode, `.repomap/cache`. sr
 
 Hard non-goals (PRD §3.2). If asked for one, decline plainly, park it in ideas.md, and suggest the in-scope alternative if one exists (`/scope-check` does this):
 
-- Semantic search or embeddings — repomap is purely structural.
+- Semantic search or embeddings — atlas is purely structural.
 - Full code intelligence (go-to-definition, rename) — that's an LSP's job.
 - IDE plugins or GUI — CLI and MCP only.
 - Editing or generating code — read-only tool.
