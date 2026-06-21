@@ -31,7 +31,8 @@ claim a win — turns trend down ~25%, but we don't headline what we can't measu
 - Markdown / JSON / XML output; `--focus`, `--lang`, `--no-private`, `--budget`.
 - `atlas diff` — structural delta between two trees or git revisions, with an
   optional `--exit-code` CI gate.
-- `atlas serve --mcp` — read-only MCP stdio server (`get_map`, `get_symbol`).
+- `atlas serve --mcp` — read-only MCP stdio server (`get_map`, `get_symbol`,
+  `get_symbol_index`, `expand_symbol`).
 - Languages: Python, TypeScript/JavaScript, Rust, Go, Java, C/C++.
 - Local, offline, deterministic, no telemetry.
 

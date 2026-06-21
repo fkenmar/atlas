@@ -25,7 +25,8 @@ where things are in one shot.
   Read the actual file before editing it or relying on any implementation detail.
 - **If the atlas MCP server is configured** (`atlas serve --mcp`), call its
   `get_map` tool for a fresh map and `get_symbol` to look up a specific
-  declaration, instead of grepping blindly.
+  declaration. For very large repos, call `get_symbol_index` for stable anchors
+  and `expand_symbol` only for the few declarations you need.
 
 Regenerate the map when the structure changes (`atlas . -o atlas-map.md`); re-runs
 are warm-cached (~80 ms). Keep a committed copy current in CI or a pre-commit hook

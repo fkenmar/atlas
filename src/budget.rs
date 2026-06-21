@@ -189,6 +189,11 @@ pub struct IndexedSymbol {
     pub kind: SymbolKind,
     /// Repo-relative path of the file that declares it.
     pub rel: String,
+    /// Stable ADR 0009 anchor: `relpath#name`, or `relpath#name@line` only when
+    /// the same file declares the same name more than once.
+    pub anchor: String,
+    /// 1-based source line of the declaration name.
+    pub line: usize,
 }
 
 /// A named type — class, interface, enum, or type alias. These are what an
@@ -410,6 +415,7 @@ fn build_symbol_index(
     let mut funcs = Vec::new();
     for &fi in order {
         let (src, parsed) = &files[fi];
+        let duplicate_names = duplicate_symbol_names(parsed);
         // Names already rendered in full above, to avoid duplicating them. A
         // one-line file shows no symbols, so none of its names are "shown".
         let shown_here: Vec<&str> = if shown[fi] {
@@ -444,6 +450,8 @@ fn build_symbol_index(
                     name: s.name.clone(),
                     kind: s.kind,
                     rel: src.rel.clone(),
+                    anchor: symbol_anchor(&src.rel, &s.name, s.line, &duplicate_names),
+                    line: s.line,
                 });
             }
         };
@@ -452,6 +460,31 @@ fn build_symbol_index(
     }
     types.extend(funcs);
     types
+}
+
+pub(crate) fn duplicate_symbol_names(parsed: &ParsedFile) -> Vec<String> {
+    let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+    for symbol in &parsed.symbols {
+        *counts.entry(symbol.name.as_str()).or_default() += 1;
+    }
+    counts
+        .into_iter()
+        .filter(|&(_, count)| count > 1)
+        .map(|(name, _)| name.to_string())
+        .collect()
+}
+
+pub(crate) fn symbol_anchor(
+    rel: &str,
+    name: &str,
+    line: usize,
+    duplicate_names: &[String],
+) -> String {
+    if duplicate_names.iter().any(|n| n == name) {
+        format!("{rel}#{name}@{line}")
+    } else {
+        format!("{rel}#{name}")
+    }
 }
 
 /// Greedily include the longest rank-ordered prefix of `candidates` whose
@@ -1272,6 +1305,8 @@ mod tests {
             .expect("a collapsed Widget class should be indexed");
         assert!(entry.rel.starts_with("src/mod"));
         assert_eq!(entry.kind, SymbolKind::Class);
+        assert_eq!(entry.anchor, format!("{}#{}", entry.rel, entry.name));
+        assert!(entry.line >= 1);
         // Types come before functions: the first function (if any) appears only
         // after every indexed type.
         let first_fn = map
@@ -1285,6 +1320,47 @@ mod tests {
         if let (Some(f), Some(t)) = (first_fn, last_type) {
             assert!(f > t, "all types should precede any function in the index");
         }
+    }
+
+    #[test]
+    fn symbol_anchor_adds_line_only_for_duplicate_names() {
+        let parsed = ParsedFile {
+            symbols: vec![
+                Symbol {
+                    kind: SymbolKind::Function,
+                    name: "from".to_string(),
+                    signature: "fn from()".to_string(),
+                    visibility: Visibility::Public,
+                    line: 10,
+                },
+                Symbol {
+                    kind: SymbolKind::Function,
+                    name: "from".to_string(),
+                    signature: "fn from(value: u8)".to_string(),
+                    visibility: Visibility::Public,
+                    line: 20,
+                },
+                Symbol {
+                    kind: SymbolKind::Class,
+                    name: "Widget".to_string(),
+                    signature: "class Widget".to_string(),
+                    visibility: Visibility::Public,
+                    line: 30,
+                },
+            ],
+            imports: Vec::new(),
+            references: Vec::new(),
+            lines: 3,
+        };
+        let duplicates = duplicate_symbol_names(&parsed);
+        assert_eq!(
+            symbol_anchor("src/x.rs", "from", 10, &duplicates),
+            "src/x.rs#from@10"
+        );
+        assert_eq!(
+            symbol_anchor("src/x.rs", "Widget", 30, &duplicates),
+            "src/x.rs#Widget"
+        );
     }
 
     #[test]

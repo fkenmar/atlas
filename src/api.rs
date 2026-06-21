@@ -128,6 +128,57 @@ pub struct SymbolHit {
     pub visibility: &'static str,
 }
 
+/// A symbol resolved from an anchor by [`expand_symbol`], plus its defining
+/// file's one-hop file-level neighbors — the just-in-time detail for
+/// progressive disclosure (ADR 0009). Neighbors are file-granular (the imports
+/// and importers already in the map), never a symbol-level call graph: resolving
+/// who *calls* a symbol is code intelligence (an LSP's job), a hard non-goal.
+#[derive(Debug, Clone)]
+pub struct SymbolExpansion {
+    /// The located declaration (signature, kind, file, line, visibility).
+    pub hit: SymbolHit,
+    /// Repo-relative paths the defining file imports, sorted and deduplicated.
+    pub imports: Vec<String>,
+    /// Repo-relative paths of files that import the defining file, sorted.
+    pub used_by: Vec<String>,
+}
+
+/// A compact stable anchor entry for progressive disclosure (ADR 0009). It is
+/// intentionally metadata-only: no signatures, no bodies, and no semantic call
+/// graph. Use [`expand_symbol`] to expand one anchor when detail is needed.
+#[derive(Debug, Clone)]
+pub struct SymbolIndexEntry {
+    /// Stable anchor: `relpath#name`, with `@line` only for same-file duplicate
+    /// names.
+    pub anchor: String,
+    /// The declared name.
+    pub name: String,
+    /// Symbol kind: `function`, `class`, `type`, etc.
+    pub kind: &'static str,
+    /// Repo-relative path of the defining file.
+    pub file: String,
+    /// 1-based line of the declaration name.
+    pub line: usize,
+    /// `public` or `private` (per-language visibility rules).
+    pub visibility: &'static str,
+}
+
+/// A budgeted thin symbol index for progressive disclosure. Entries are
+/// type-like declarations first, then functions/constants, each tier ordered by
+/// file rank and source order. The index is designed to be cheap to keep in
+/// context and paired with [`expand_symbol`] for just-in-time detail.
+#[derive(Debug, Clone)]
+pub struct SymbolIndexMap {
+    pub repo_name: String,
+    pub target_tokens: usize,
+    pub rendered_tokens: usize,
+    pub total_loc: usize,
+    pub total_files: usize,
+    pub entries: Vec<SymbolIndexEntry>,
+    pub skipped_files: usize,
+    pub unwired_files: usize,
+}
+
 /// Find every declaration named `name` (exact match) across the tree at `root`,
 /// in deterministic (file, line) order. The library equivalent of "where is X
 /// defined?" — returns each site so an agent can navigate multi-definition
@@ -162,6 +213,184 @@ pub fn find_symbol(root: &Path, name: &str, opts: &MapOptions) -> Result<Vec<Sym
     // explicitly to be robust to future ordering changes.
     hits.sort_by(|a, b| a.file.cmp(&b.file).then(a.line.cmp(&b.line)));
     Ok(hits)
+}
+
+/// Build the opt-in thin anchor index described in ADR 0009. It honors
+/// `opts.langs`, `opts.no_private`, `opts.cache`, and `opts.budget`; `focus` is
+/// intentionally ignored so anchors remain a repo-wide discovery surface. The
+/// output has no signatures: callers expand selected anchors through
+/// [`expand_symbol`].
+pub fn build_symbol_index(root: &Path, opts: &MapOptions) -> Result<SymbolIndexMap, MapError> {
+    use crate::parse::{SymbolKind, Visibility};
+    let (repo_name, outcome) = discover_and_parse(root, opts)?;
+    let graph = crate::link::link(&outcome.files);
+    let ranking = crate::rank::rank(&graph, &[]);
+
+    let mut order: Vec<usize> = (0..outcome.files.len()).collect();
+    order.sort_by(|&a, &b| {
+        ranking
+            .score(b)
+            .total_cmp(&ranking.score(a))
+            .then_with(|| outcome.files[a].0.rel.cmp(&outcome.files[b].0.rel))
+    });
+
+    let mut types = Vec::new();
+    let mut funcs = Vec::new();
+    for &fi in &order {
+        let (src, parsed) = &outcome.files[fi];
+        let duplicate_names = crate::budget::duplicate_symbol_names(parsed);
+        for sym in &parsed.symbols {
+            if opts.no_private && sym.visibility != Visibility::Public {
+                continue;
+            }
+            let keep = matches!(
+                sym.kind,
+                SymbolKind::Class
+                    | SymbolKind::Interface
+                    | SymbolKind::Enum
+                    | SymbolKind::TypeAlias
+                    | SymbolKind::Function
+                    | SymbolKind::Constant
+            );
+            if !keep {
+                continue;
+            }
+            let entry = SymbolIndexEntry {
+                anchor: crate::budget::symbol_anchor(
+                    &src.rel,
+                    &sym.name,
+                    sym.line,
+                    &duplicate_names,
+                ),
+                name: sym.name.clone(),
+                kind: crate::render::json::kind_name(sym.kind),
+                file: src.rel.clone(),
+                line: sym.line,
+                visibility: crate::render::json::visibility_name(sym.visibility),
+            };
+            if matches!(
+                sym.kind,
+                SymbolKind::Class
+                    | SymbolKind::Interface
+                    | SymbolKind::Enum
+                    | SymbolKind::TypeAlias
+            ) {
+                types.push(entry);
+            } else {
+                funcs.push(entry);
+            }
+        }
+    }
+    types.extend(funcs);
+
+    let mut map = SymbolIndexMap {
+        repo_name,
+        target_tokens: opts.budget,
+        rendered_tokens: 0,
+        total_loc: outcome.stats.total_lines,
+        total_files: outcome.stats.parsed_files,
+        entries: types,
+        skipped_files: outcome.stats.skipped_files,
+        unwired_files: outcome.stats.unwired_files,
+    };
+    let counter = TiktokenCounter::cl100k().map_err(MapError::Tokenizer)?;
+    fit_symbol_index_map(&mut map, &counter);
+    Ok(map)
+}
+
+fn fit_symbol_index_map<T: crate::budget::Tokenizer>(map: &mut SymbolIndexMap, counter: &T) {
+    let candidates = map.entries.clone();
+    let (mut lo, mut hi) = (0usize, candidates.len());
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        map.entries = candidates[..mid].to_vec();
+        if measure_symbol_index_map(map, counter) <= map.target_tokens {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    map.entries = candidates[..lo].to_vec();
+    map.rendered_tokens = measure_symbol_index_map(map, counter);
+}
+
+fn measure_symbol_index_map<T: crate::budget::Tokenizer>(
+    map: &SymbolIndexMap,
+    counter: &T,
+) -> usize {
+    counter.count(&crate::render::markdown::render_symbol_index(map))
+}
+
+/// Resolve a symbol anchor (ADR 0009) to its signature plus its defining file's
+/// one-hop file-level neighbors — the on-demand counterpart to the thin map
+/// index for progressive disclosure. An anchor is `(file, name)`, optionally
+/// pinned to a 1-based `line` to disambiguate overloads within a file; `file` is
+/// the repo-relative path of the defining file. Returns `Ok(None)` when no such
+/// declaration exists (e.g. a stale anchor), never an error. Honors
+/// `opts.no_private`, `opts.langs`, and `opts.cache`; `opts.budget`/`focus` are
+/// ignored (no ranking or packing). Neighbors stay file-granular by design — no
+/// call resolution (PRD §3.2 non-goal).
+pub fn expand_symbol(
+    root: &Path,
+    file: &str,
+    name: &str,
+    line: Option<usize>,
+    opts: &MapOptions,
+) -> Result<Option<SymbolExpansion>, MapError> {
+    use crate::parse::Visibility;
+    let (_repo_name, outcome) = discover_and_parse(root, opts)?;
+
+    // Resolve the anchor: the file with this repo-relative path, then its first
+    // symbol matching `name` (and `line`, if pinned). discover order is sorted
+    // and a file's symbols are line-sorted, so "first match" is deterministic.
+    let Some((file_idx, (src, parsed))) = outcome
+        .files
+        .iter()
+        .enumerate()
+        .find(|(_, (s, _))| s.rel == file)
+    else {
+        return Ok(None);
+    };
+    let Some(sym) = parsed.symbols.iter().find(|sym| {
+        sym.name == name
+            && line.is_none_or(|l| sym.line == l)
+            && (!opts.no_private || sym.visibility == Visibility::Public)
+    }) else {
+        return Ok(None);
+    };
+    let hit = SymbolHit {
+        name: sym.name.clone(),
+        kind: crate::render::json::kind_name(sym.kind),
+        signature: sym.signature.clone(),
+        file: src.rel.clone(),
+        line: sym.line,
+        visibility: crate::render::json::visibility_name(sym.visibility),
+    };
+
+    // One-hop file-level neighbors from the import graph (ADR 0002): a File
+    // node's index equals its index into `files`. `imports` are this file's
+    // File→File out-edges; `used_by` are the files whose out-edges include it.
+    let graph = crate::link::link(&outcome.files);
+    let num_files = outcome.files.len();
+    let mut imports: Vec<String> = graph.edges[file_idx]
+        .iter()
+        .filter(|&&t| t < num_files)
+        .map(|&t| outcome.files[t].0.rel.clone())
+        .collect();
+    imports.sort();
+    imports.dedup();
+    let mut used_by: Vec<String> = (0..num_files)
+        .filter(|&j| j != file_idx && graph.edges[j].contains(&file_idx))
+        .map(|j| outcome.files[j].0.rel.clone())
+        .collect();
+    used_by.sort();
+    used_by.dedup();
+
+    Ok(Some(SymbolExpansion {
+        hit,
+        imports,
+        used_by,
+    }))
 }
 
 /// Shared discover → (language filter) → parse front half of the pipeline,
@@ -323,6 +552,77 @@ mod tests {
             a.iter().map(|h| (&h.file, h.line)).collect::<Vec<_>>(),
             b.iter().map(|h| (&h.file, h.line)).collect::<Vec<_>>(),
         );
+    }
+
+    #[test]
+    fn build_symbol_index_returns_budgeted_anchors_without_signatures() {
+        let index = build_symbol_index(
+            Path::new("tests/queries/fixtures"),
+            &MapOptions {
+                budget: 512,
+                cache: false,
+                ..MapOptions::default()
+            },
+        )
+        .expect("fixtures should index");
+        assert!(index.rendered_tokens <= index.target_tokens);
+        assert!(!index.entries.is_empty(), "expected anchor entries");
+        let entry = index
+            .entries
+            .iter()
+            .find(|e| e.name == "top_level" && e.file == "rust.rs")
+            .expect("rust top_level should be indexed");
+        assert_eq!(entry.anchor, "rust.rs#top_level");
+        assert_eq!(entry.kind, "function");
+        assert!(entry.line >= 1);
+    }
+
+    fn expand(file: &str, name: &str, line: Option<usize>) -> Option<SymbolExpansion> {
+        expand_symbol(
+            Path::new("tests/queries/fixtures"),
+            file,
+            name,
+            line,
+            &MapOptions {
+                cache: false,
+                ..MapOptions::default()
+            },
+        )
+        .expect("fixtures parse")
+    }
+
+    #[test]
+    fn expand_symbol_resolves_an_anchor() {
+        // rust.rs defines `top_level` (see tests/queries/fixtures/rust.rs).
+        let e = expand("rust.rs", "top_level", None).expect("anchor should resolve");
+        assert_eq!(e.hit.name, "top_level");
+        assert_eq!(e.hit.file, "rust.rs");
+        assert!(!e.hit.signature.is_empty());
+        // Neighbors come back sorted + deduped (possibly empty for an isolated
+        // fixture file) — the deterministic contract (NFR-4).
+        let mut s = e.imports.clone();
+        s.sort();
+        s.dedup();
+        assert_eq!(e.imports, s);
+        let mut u = e.used_by.clone();
+        u.sort();
+        u.dedup();
+        assert_eq!(e.used_by, u);
+    }
+
+    #[test]
+    fn expand_symbol_unknown_anchor_is_none() {
+        assert!(expand("rust.rs", "definitely_not_a_real_symbol_xyz", None).is_none());
+        assert!(expand("no-such-file.rs", "top_level", None).is_none());
+    }
+
+    #[test]
+    fn expand_symbol_line_pin_disambiguates() {
+        let e = expand("rust.rs", "top_level", None).expect("anchor should resolve");
+        let line = e.hit.line;
+        // The correct line still resolves; a wrong line does not.
+        assert!(expand("rust.rs", "top_level", Some(line)).is_some());
+        assert!(expand("rust.rs", "top_level", Some(line + 9999)).is_none());
     }
 
     #[test]
