@@ -21,6 +21,7 @@ EXAMPLES:
   atlas . --no-private         Public API surface only
   atlas . --format json        Emit JSON instead of Markdown
   atlas . -o atlas-map.md      Atomically write the map to a file
+  atlas . --check ATLAS.md     Verify a committed map is current (exit 1 if stale)
   atlas . --for-agent          Add a short agent-facing Markdown preamble
   atlas . --timings            Print stage timings to stderr
   atlas diff HEAD~1 HEAD       Structural delta between two git revisions (or two dirs)
@@ -83,6 +84,13 @@ pub struct Cli {
     /// Atomically write output to this file instead of stdout.
     #[arg(short, long, value_name = "PATH")]
     pub output: Option<PathBuf>,
+
+    /// Verify an existing committed map is current instead of writing it:
+    /// regenerate the map and compare byte-for-byte. Exit 0 if identical, 1 if
+    /// stale — for CI / pre-commit gating of a checked-in map (e.g. ATLAS.md).
+    /// Mutually exclusive with --output.
+    #[arg(long, value_name = "PATH")]
+    pub check: Option<PathBuf>,
 
     /// Restrict to languages by extension, e.g. --lang py,rs.
     #[arg(short, long, value_name = "CSV")]
@@ -606,6 +614,13 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         return Err(2);
     }
 
+    if cli.check.is_some() && cli.output.is_some() {
+        eprintln!(
+            "atlas: --check and --output are mutually exclusive (one verifies, the other writes)"
+        );
+        return Err(2);
+    }
+
     // Defensive fallback for direct `run_with` callers: real CLI invocations of
     // `atlas serve ...` are routed in `run` before map parsing.
     let path_str = cli.path.to_string_lossy();
@@ -737,7 +752,9 @@ fn run_with(cli: Cli) -> Result<(), i32> {
             if cli.for_agent {
                 md = with_agent_preamble(&md);
             }
-            if cli.output.is_none() && should_color(cli.color) {
+            // Never colorize when writing to a file or verifying one: the
+            // committed map must be the plain, byte-deterministic render.
+            if cli.output.is_none() && cli.check.is_none() && should_color(cli.color) {
                 crate::render::color::colorize(&md)
             } else {
                 md
@@ -756,7 +773,9 @@ fn run_with(cli: Cli) -> Result<(), i32> {
     );
 
     let write_start = Instant::now();
-    if let Some(path) = cli.output.as_deref() {
+    if let Some(path) = cli.check.as_deref() {
+        check_output(path, &output)?;
+    } else if let Some(path) = cli.output.as_deref() {
         write_output_atomic(path, &output)?;
     } else {
         print!("{output}");
@@ -765,8 +784,9 @@ fn run_with(cli: Cli) -> Result<(), i32> {
         cli.timings,
         "write",
         write_start.elapsed(),
-        cli.output
+        cli.check
             .as_deref()
+            .or(cli.output.as_deref())
             .and_then(Path::to_str)
             .unwrap_or("stdout"),
     );
@@ -790,6 +810,40 @@ fn log_timing(enabled: bool, label: &str, duration: Duration, detail: &str) {
         eprintln!("atlas timings: {label:<12} {millis:>8.2} ms");
     } else {
         eprintln!("atlas timings: {label:<12} {millis:>8.2} ms  {detail}");
+    }
+}
+
+/// `--check <PATH>`: compare the freshly rendered map against an existing file
+/// (a committed map kept fresh in CI / a pre-commit hook). Byte-identical ⇒
+/// exit 0; stale ⇒ exit 1 with a regenerate hint; missing/unreadable ⇒ exit 2.
+/// Relies on atlas's deterministic output (NFR-4): same repo + flags ⇒ same bytes.
+fn check_output(path: &Path, expected: &str) -> Result<(), i32> {
+    let actual = std::fs::read_to_string(path).map_err(|err| {
+        match err.kind() {
+            std::io::ErrorKind::NotFound => eprintln!(
+                "atlas: --check target not found: {} — generate it first with -o {}",
+                path.display(),
+                path.display()
+            ),
+            std::io::ErrorKind::PermissionDenied => eprintln!(
+                "atlas: permission denied reading --check target {}",
+                path.display()
+            ),
+            _ => eprintln!(
+                "atlas: could not read --check target {}: {err}",
+                path.display()
+            ),
+        }
+        2
+    })?;
+    if actual == expected {
+        Ok(())
+    } else {
+        eprintln!(
+            "atlas: {} is out of date — regenerate it with the same flags and -o, then commit the result",
+            path.display()
+        );
+        Err(1)
     }
 }
 
@@ -1127,6 +1181,7 @@ mod tests {
         assert_eq!(cli.budget, DEFAULT_BUDGET);
         assert_eq!(cli.format, Format::Md);
         assert!(cli.output.is_none());
+        assert!(cli.check.is_none());
         assert!(cli.focus.is_empty());
         assert!(!cli.no_private);
         assert!(!cli.for_agent);
@@ -1216,6 +1271,32 @@ mod tests {
         let wrapped = with_agent_preamble("# atlas: demo\n");
         assert!(wrapped.starts_with("> atlas agent note:"));
         assert!(wrapped.ends_with("# atlas: demo\n"));
+    }
+
+    #[test]
+    fn check_flag_parses() {
+        assert!(parse(&["atlas"]).check.is_none());
+        let cli = parse(&["atlas", "--check", "ATLAS.md"]);
+        assert_eq!(cli.check, Some(PathBuf::from("ATLAS.md")));
+        assert!(cli.output.is_none());
+    }
+
+    #[test]
+    fn check_output_reports_match_stale_and_missing() {
+        let dir = std::env::temp_dir().join(format!("atlas-cli-check-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let map = dir.join("ATLAS.md");
+        std::fs::write(&map, "# atlas map\n").unwrap();
+
+        // Up to date ⇒ Ok(()).
+        assert_eq!(check_output(&map, "# atlas map\n"), Ok(()));
+        // Stale ⇒ Err(1), the CI failure signal.
+        assert_eq!(check_output(&map, "# atlas map (changed)\n"), Err(1));
+        // Missing target ⇒ Err(2), a usage error.
+        assert_eq!(check_output(&dir.join("absent.md"), "anything"), Err(2));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
