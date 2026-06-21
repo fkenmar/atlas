@@ -57,6 +57,8 @@ used by: parse.rs
 
 Files are ordered by importance (a PageRank over the import graph), `#1` being the most central. Each file shows its public symbols, what it imports, and what depends on it — everything an agent needs to navigate, nothing it doesn't. The header reports the budget and the actual `rendered` token count.
 
+Want to see more output before installing? The [example gallery](examples/gallery/) has real maps for a Python service, a TypeScript app, and a mixed Go/Rust/Python repo, each with the exact command used.
+
 **What it maps:** Python (`.py`, `.pyi`), TypeScript/JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, …), Rust (`.rs`), Go (`.go`), Java (`.java`), and C/C++ (`.c`, `.h`, `.cpp`, `.hpp`, …). It honors your `.gitignore` and an optional `.atlasignore`, and always skips hidden directories and common vendored/build folders (`node_modules`, `target`, `dist`, `build`, `venv`, `__pycache__`, `vendor`, …). If a file you expected isn't there, it's almost always an unsupported language or a skipped directory. For exactly what's extracted per language — symbol kinds, visibility rules, import-linking behavior, and caveats — see the [language support matrix](docs/languages.md).
 
 ---
@@ -206,7 +208,9 @@ atlas . --for-agent -o atlas-map.md
 atlas . --focus src/auth --focus src/api > atlas-map.md
 ```
 
-**Keep it in the repo** so every contributor and agent starts oriented — commit `atlas-map.md` and regenerate it in a pre-commit hook or CI.
+**Keep it in the repo** so every contributor and agent starts oriented — commit `atlas-map.md` and regenerate it in a [pre-commit hook](docs/pre-commit.md) or [CI](docs/ci-recipes.md), or point your [`CLAUDE.md` / `AGENTS.md`](docs/agent-files.md) at it.
+
+For copy-paste recipes per agent (Claude Code, Cursor, Copilot, terminal agents) and per-editor [task snippets](docs/editor-snippets.md), see the [agent integration cookbook](docs/agent-cookbook.md).
 
 > Experimental on `dev`: `atlas serve --mcp` exposes a `get_map` tool over stdio JSON-RPC/MCP so compatible agents can pull a fresh map directly.
 
