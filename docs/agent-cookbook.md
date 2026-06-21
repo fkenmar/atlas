@@ -35,7 +35,7 @@ atlas . --for-agent -o atlas-map.md
 | ----------------------------------------------- | --------------------------------- |
 | Bias the map toward the files you're editing    | `--focus src/auth --focus src/api`|
 | One stack of a polyglot repo                     | `--lang ts,tsx` or `--lang py`    |
-| More/less detail (default 2,048 tokens)          | `--budget 4096` / `--budget 1024` |
+| More/less detail (default 2,048 tokens)          | `--budget 4096` / `--budget 1024`, or `--preset small\|large\|review` |
 | Public API surface only                          | `--no-private`                    |
 | A parser-safe boundary for untrusted repos       | `--format xml` (see [prompt-injection.md](prompt-injection.md)) |
 | Machine consumption (your own tooling)           | `--format json`                   |
