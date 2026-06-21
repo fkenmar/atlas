@@ -16,11 +16,13 @@
 
 <sub>
   <a href="#install"><b>Install</b></a> ·
+  <a href="#60-second-quickstart"><b>Quickstart</b></a> ·
   <a href="#use"><b>Use</b></a> ·
   <a href="#use-it-with-your-ai-agent"><b>Use it with your agent</b></a> ·
   <a href="#docs-for-agents"><b>Docs for agents</b></a> ·
   <a href="#why-it-works"><b>Why it works</b></a> ·
-  <a href="#troubleshooting"><b>Troubleshooting</b></a>
+  <a href="#troubleshooting"><b>Troubleshooting</b></a> ·
+  <a href="docs/FAQ.md"><b>FAQ</b></a>
 </sub>
 
 <br>
@@ -55,7 +57,7 @@ used by: parse.rs
 
 Files are ordered by importance (a PageRank over the import graph), `#1` being the most central. Each file shows its public symbols, what it imports, and what depends on it — everything an agent needs to navigate, nothing it doesn't. The header reports the budget and the actual `rendered` token count.
 
-**What it maps:** Python (`.py`, `.pyi`), TypeScript/JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, …), Rust (`.rs`), Go (`.go`), Java (`.java`), and C/C++ (`.c`, `.h`, `.cpp`, `.hpp`, …). It honors your `.gitignore` and an optional `.atlasignore`, and always skips hidden directories and common vendored/build folders (`node_modules`, `target`, `dist`, `build`, `venv`, `__pycache__`, `vendor`, …). If a file you expected isn't there, it's almost always an unsupported language or a skipped directory.
+**What it maps:** Python (`.py`, `.pyi`), TypeScript/JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, …), Rust (`.rs`), Go (`.go`), Java (`.java`), and C/C++ (`.c`, `.h`, `.cpp`, `.hpp`, …). It honors your `.gitignore` and an optional `.atlasignore`, and always skips hidden directories and common vendored/build folders (`node_modules`, `target`, `dist`, `build`, `venv`, `__pycache__`, `vendor`, …). If a file you expected isn't there, it's almost always an unsupported language or a skipped directory. For exactly what's extracted per language — symbol kinds, visibility rules, import-linking behavior, and caveats — see the [language support matrix](docs/languages.md).
 
 ---
 
@@ -75,7 +77,7 @@ atlas is a Rust binary, not a Python package — the wheel just drops the native
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fkenmar/atlas/releases/download/v0.2.1-alpha/atlas-installer.sh | sh
 ```
 
-On Windows, grab `atlas-x86_64-pc-windows-msvc.zip` from the [releases page](https://github.com/fkenmar/atlas/releases). Binaries for all platforms (x64 + arm64) are attached to every release by [cargo-dist](https://opensource.axo.dev/cargo-dist/).
+On Windows, grab `atlas-x86_64-pc-windows-msvc.zip` from the [releases page](https://github.com/fkenmar/atlas/releases). Binaries for all platforms (x64 + arm64) are attached to every release by [cargo-dist](https://opensource.axo.dev/cargo-dist/). For Windows-specific `PATH`, PowerShell, and completion setup, see the [Windows guide](docs/windows.md).
 
 **From source** — any platform, needs [Rust](https://rustup.rs):
 
@@ -86,6 +88,8 @@ cargo install --path .
 ```
 
 This builds `atlas` into `~/.cargo/bin` — make sure that's on your `PATH` (rustup sets this up by default).
+
+Behind a corporate proxy, on an air-gapped host, or installing from an internal mirror? See [`docs/install-offline.md`](docs/install-offline.md). atlas runs fully offline after install.
 
 Either way, verify and take it for a spin:
 
@@ -99,6 +103,38 @@ You should see a `# atlas: …` header followed by a list of ranked files. That'
 
 atlas runs locally and does not collect telemetry; see
 [`docs/PRIVACY.md`](docs/PRIVACY.md) for the offline/privacy model.
+
+---
+
+## 60-second quickstart
+
+From zero to a map your agent can read:
+
+```
+pipx install --pre atlas-map     # or any install method above
+atlas --version                  # confirm it's on your PATH
+cd path/to/your/project
+atlas . --budget 1024            # a quick, small map to stdout
+atlas . -o atlas-map.md          # save the full default map to a file
+```
+
+Success looks like a header and a ranked file list — the most central file is
+`#1`:
+
+```
+# atlas: your-project (3740 LOC, 16 files) | budget 1024 | rendered 1012 tok
+
+## cache.rs (#1 — imported by 1 file(s))
+pub struct Cache
+    pub fn open(&Path) -> Cache
+...
+```
+
+If you instead see **`no supported source files found`**, it's almost always the
+two first-run gotchas: you're pointing at a single file or a subfolder instead of
+the **repo root**, or the project is in a language atlas doesn't map yet (the
+error lists the file extensions it saw). Head to the full [usage](#use) and
+[troubleshooting](#troubleshooting) sections from here.
 
 ---
 
@@ -123,6 +159,8 @@ atlas . --color always           # force ANSI color (auto-detects a terminal oth
 When you run atlas in a terminal the Markdown map is colorized for scannability; piped, redirected, or `--output` file output stays plain, so feeding it to an agent or a file is unaffected (`--color never` to disable, `NO_COLOR` is honored).
 
 **Shell completions:** `atlas --completions <bash|zsh|fish|powershell|elvish>` prints a completion script — e.g. `atlas --completions zsh > ~/.zfunc/_atlas`.
+
+**Pasting maps into an agent?** A map is untrusted data derived from source. `--format xml` escapes the content so it can't break out of its container — see the [prompt-injection threat model](docs/prompt-injection.md) for safe wrappers and what escaping does (and doesn't) guarantee.
 
 By default atlas aims for a 2,048-token budget. When a repo doesn't fit, it degrades in steps rather than truncating: it drops private symbols (the header shows `public-only`), then elides parameter detail, then collapses the lowest-ranked files to a single line. Raise `--budget` for more detail, or use `--focus` to protect the paths you care about.
 
@@ -211,6 +249,12 @@ Sourcegraph/SCIP, and concat-style repo packers, see
 - **Empty map / "0 files".** atlas found no supported source under that path. Check the language is one it maps (Python, TS/JS, Rust, Go, Java, C/C++) and that you're pointing at the project root — not a single file, and not a vendored or ignored directory. The error includes the top file extensions atlas saw to make wrong-root or unsupported-language cases easier to spot.
 - **`command not found: atlas`.** `~/.cargo/bin` isn't on your `PATH`. Add it (rustup's installer normally does), or run the binary by its full path.
 - **A symbol is wrong or missing.** That's usually a tree-sitter extraction bug — please [open an issue](https://github.com/fkenmar/atlas/issues/new?template=extraction_bug.md) with a minimal snippet that reproduces it.
+- **Too much noise, or a missing file in a big repo.** Tune what atlas maps with `.atlasignore`, `--focus`, `--lang`, or by mapping a subdirectory — see [`docs/monorepos.md`](docs/monorepos.md).
+- **Scripting atlas in CI.** The exit codes are a stable contract (`0` success, `1` operational error, `2` usage error) — see [`docs/exit-codes.md`](docs/exit-codes.md).
+- **Old `repomap` names or files** (`.repomapignore`, `.repomap/`, `REPOMAP.md`). atlas doesn't read them — see the [migration guide](docs/MIGRATION.md).
+- **On Windows** — `PATH`, PowerShell, execution policy, and completions are covered in the [Windows guide](docs/windows.md).
+
+More answers in the [FAQ](docs/FAQ.md).
 
 ---
 

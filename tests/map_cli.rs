@@ -189,6 +189,81 @@ fn empty_map_diagnostic_reports_seen_extensions() {
 }
 
 #[test]
+fn success_exits_zero() {
+    // The documented exit-code contract (docs/exit-codes.md): a normal map is 0.
+    let repo = write_python_repo("exit-success");
+    let output = run_atlas(&[repo.to_str().unwrap(), "--budget", "200"]);
+    assert_eq!(output.status.code(), Some(0));
+    let _ = fs::remove_dir_all(repo);
+}
+
+#[test]
+fn missing_path_is_usage_error() {
+    // A path that doesn't exist is a usage error (2), not an operational one (1).
+    let missing = temp_repo("exit-missing");
+    let _ = fs::remove_dir_all(&missing); // ensure it does not exist
+    let output = run_atlas(&[missing.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr).expect("utf-8 stderr");
+    assert!(stderr.contains("path not found"), "{stderr}");
+}
+
+#[test]
+fn zero_budget_is_usage_error() {
+    let repo = write_python_repo("exit-budget");
+    let output = run_atlas(&[repo.to_str().unwrap(), "--budget", "0"]);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8(output.stderr).expect("utf-8 stderr");
+    assert!(stderr.contains("--budget must be at least 1"), "{stderr}");
+    let _ = fs::remove_dir_all(repo);
+}
+
+#[test]
+fn lang_matching_no_files_is_operational_error() {
+    // Files exist, but --lang selects none: an operational error (1), distinct
+    // from an unknown --lang value (2, covered below).
+    let repo = write_python_repo("exit-lang-none");
+    let output = run_atlas(&[repo.to_str().unwrap(), "--lang", "rs"]);
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8(output.stderr).expect("utf-8 stderr");
+    assert!(stderr.contains("--lang matched none"), "{stderr}");
+    let _ = fs::remove_dir_all(repo);
+}
+
+#[test]
+fn empty_map_names_unsupported_language() {
+    // A repo of only Ruby files: the diagnostic should list .rb and name Ruby as
+    // unsupported, so the user knows it's a language gap, not a wrong root (#75).
+    let repo = temp_repo("empty-ruby");
+    fs::write(repo.join("app.rb"), "def run\n  42\nend\n").expect("write ruby");
+    fs::write(repo.join("lib.rb"), "class Lib\nend\n").expect("write ruby");
+    let output = run_atlas(&[repo.to_str().unwrap()]);
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8(output.stderr).expect("utf-8 stderr");
+    assert!(stderr.contains(".rb (2)"), "{stderr}");
+    assert!(stderr.contains("does not support Ruby"), "{stderr}");
+    let _ = fs::remove_dir_all(repo);
+}
+
+#[test]
+fn empty_map_flags_files_hidden_in_vendored_dirs() {
+    // All source lives under a vendored directory atlas skips: the diagnostic
+    // should point at the ignored-subtree case rather than listing extensions
+    // (which it never scanned) (#75).
+    let repo = temp_repo("empty-vendored");
+    let vendored = repo.join("node_modules").join("pkg");
+    fs::create_dir_all(&vendored).expect("create vendored dir");
+    fs::write(vendored.join("index.py"), "def x():\n    return 1\n").expect("write py");
+    let output = run_atlas(&[repo.to_str().unwrap()]);
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8(output.stderr).expect("utf-8 stderr");
+    assert!(stderr.contains("ignored or vendored directory"), "{stderr}");
+    let _ = fs::remove_dir_all(repo);
+}
+
+#[test]
 fn unknown_lang_error_text_lists_tier2_extensions() {
     // The unknown-`--lang` message must advertise the Tier 2 extensions so a
     // user who tries an unsupported language sees Go/Java/C/C++ are covered (#35).

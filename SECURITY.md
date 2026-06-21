@@ -54,3 +54,11 @@ The maintainer will acknowledge a credible report, investigate, and coordinate a
 fix before public disclosure. If the issue is not accepted as a vulnerability,
 the maintainer will explain why and may convert it into a normal bug or hardening
 issue.
+
+## Hardening guidance
+
+- **Using maps in LLM prompts.** A map is untrusted data derived from source
+  code. See [`docs/prompt-injection.md`](docs/prompt-injection.md) for the threat
+  model, the XML-escaping guarantees, and safe prompt wrappers.
+- **Restricted-network install.** atlas runs offline after install; for proxy,
+  air-gapped, and mirror setups see [`docs/install-offline.md`](docs/install-offline.md).
