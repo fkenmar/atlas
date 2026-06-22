@@ -269,8 +269,11 @@ It reads your repo with [tree-sitter](https://tree-sitter.github.io/tree-sitter/
 | Reverse-dependency edges | ✓ | inside Aider | — | — |
 | MCP server | ✓ | — | — | — |
 | Single-binary install | ✓ | Python app | native pkg | varies |
+| Deterministic, cache-stable output | ✓ | ✗ *(varies run-to-run)* | ✓ | ✓ |
 
 <sub>Aider's repo-map pioneered the ranked-map idea; atlas unbundles it into a standalone, deterministic CLI/library/MCP tool usable with <em>any</em> agent. Full, fair breakdown — including tree-sitter CLI and Sourcegraph/SCIP — in <a href="docs/comparison.md">docs/comparison.md</a>.</sub>
+
+**Measured, equal budget** (pytest 8.2.0, 20 comprehension questions, claude-sonnet-4-6, both arms 20/20 accuracy): atlas cut tokens **−65.4%** vs Aider repo-map's **−31.3%** at matched ~2k-token maps — atlas answers at *half Aider's cost* (atlas's map held 12/20 answer keys vs Aider's 2/20). atlas's output is also **byte-identical run-to-run** (so a committed map stays cache-stable in the prompt prefix), where Aider's [is not](https://github.com/Aider-AI/aider/issues/1874). Methodology + caveats (N=1; edit-task variance): [benchmark/history.md](benchmark/history.md).
 
 **What about "write less code" skills like [ponytail](https://github.com/DietrichGebert/ponytail)?** Complementary, not competing — and a useful illustration of *why a map matters*. Ponytail is a behavioral nudge ("reuse, don't rewrite"); atlas is structural visibility (it shows the agent *what already exists*). On a find-and-reuse edit task (use the existing helper instead of reimplementing it), both arms that had an atlas map **passed**, and both arms without one **failed** — including ponytail-only: its nudge can't help an agent reuse code it can't see. atlas resolved it in 7 turns at ~half the tokens of the reimplementing run. Pair the two if you like; the map is what made reuse possible. <sub>(Find-and-reuse task, claude-sonnet-4-6, pytest 8.2.0, N=1 — the robust signal is the reuse-vs-reimplement PASS/FAIL, not the token counts; details in [`benchmark/history.md`](benchmark/history.md) and [`docs/comparison.md`](docs/comparison.md).)</sub>
 
