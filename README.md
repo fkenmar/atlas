@@ -301,7 +301,8 @@ contract pre-1.0 (the JSON/XML schemas) versus what may change (the Markdown
 map), [release readiness gates](docs/release-readiness.md) for the
 alpha/beta/stable criteria, [STATUS.md](STATUS.md) for current state,
 [CHANGELOG.md](CHANGELOG.md) for what's landed, and [docs/PRD.md](docs/PRD.md)
-for the full design.
+for the full design. The [ROADMAP](ROADMAP.md) lays out what's planned, grouped
+by user outcome.
 
 Building tooling on the output? `--format json` is a versioned contract with a
 machine-readable JSON Schema:

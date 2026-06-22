@@ -58,6 +58,7 @@ trying to do. New to atlas? Start with the [README](../README.md) and the
 
 ## Project & process
 
+- [ROADMAP](../ROADMAP.md) — planned work, grouped by user outcome.
 - [STATUS](../STATUS.md) — current milestone and board.
 - [CHANGELOG](../CHANGELOG.md) — user-facing changes by release.
 - [CONTRIBUTING](../CONTRIBUTING.md) — build/test, conventions, good first issues.
