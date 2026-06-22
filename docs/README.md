@@ -71,6 +71,7 @@ trying to do. New to atlas? Start with the [README](../README.md) and the
 - [Release-readiness gates](release-readiness.md) — alpha/beta/stable bars.
 - [Launch checklist](LAUNCH_CHECKLIST.md) — metadata, trust files, claim checks.
 - [Submissions playbook](submissions.md) & [ready-to-open packets](submission-drafts.md) — directories & awesome-lists.
+- [Release announcement template](RELEASE_ANNOUNCEMENT_TEMPLATE.md) — fill-in copy (GitHub note / social / HN) with honest-claim guardrails.
 - [Social launch copy](social-launch.md) — X / LinkedIn drafts.
 - [Post-launch outreach](post-launch-outreach.md) · [Adoption metrics](ADOPTION_METRICS.md) · [Release-notes draft](release-notes-draft.md)
 

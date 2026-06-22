@@ -1,7 +1,9 @@
 # Launch checklist
 
 This checklist is for release candidates and public launch passes. It keeps repo
-metadata, trust files, preview assets, and claims in sync.
+metadata, trust files, preview assets, and claims in sync. For the announcement
+copy itself, use the
+[release announcement template](RELEASE_ANNOUNCEMENT_TEMPLATE.md).
 
 ## Release candidate
 
