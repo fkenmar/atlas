@@ -164,6 +164,7 @@ atlas . --for-agent              # add a short Markdown note for agent context
 atlas . --timings                # print stage timings to stderr
 atlas diff HEAD~1 HEAD           # structural delta between two git revisions (or two dirs)
 atlas serve --mcp                # experimental MCP stdio server
+atlas doctor                     # diagnose install, detected languages, and cache
 atlas . --color always           # force ANSI color (auto-detects a terminal otherwise)
 ```
 
@@ -271,10 +272,13 @@ It reads your repo with [tree-sitter](https://tree-sitter.github.io/tree-sitter/
 
 <sub>Aider's repo-map pioneered the ranked-map idea; atlas unbundles it into a standalone, deterministic CLI/library/MCP tool usable with <em>any</em> agent. Full, fair breakdown — including tree-sitter CLI and Sourcegraph/SCIP — in <a href="docs/comparison.md">docs/comparison.md</a>.</sub>
 
+**What about "write less code" skills like [ponytail](https://github.com/DietrichGebert/ponytail)?** Complementary, not competing — and a useful illustration of *why a map matters*. Ponytail is a behavioral nudge ("reuse, don't rewrite"); atlas is structural visibility (it shows the agent *what already exists*). On a find-and-reuse edit task (use the existing helper instead of reimplementing it), both arms that had an atlas map **passed**, and both arms without one **failed** — including ponytail-only: its nudge can't help an agent reuse code it can't see. atlas resolved it in 7 turns at ~half the tokens of the reimplementing run. Pair the two if you like; the map is what made reuse possible. <sub>(Find-and-reuse task, claude-sonnet-4-6, pytest 8.2.0, N=1 — the robust signal is the reuse-vs-reimplement PASS/FAIL, not the token counts; details in [`benchmark/history.md`](benchmark/history.md) and [`docs/comparison.md`](docs/comparison.md).)</sub>
+
 ---
 
 ## Troubleshooting
 
+- **First stop: `atlas doctor`.** Run `atlas doctor` (optionally with a path) for a quick diagnosis — it prints the installed version, the binary's location, which languages are supported, the source files it detects per language (or why it found none), and the cache status. It's fast and read-only.
 - **Empty map / "0 files".** atlas found no supported source under that path. Check the language is one it maps (Python, TS/JS, Rust, Go, Java, C/C++) and that you're pointing at the project root — not a single file, and not a vendored or ignored directory. The error includes the top file extensions atlas saw to make wrong-root or unsupported-language cases easier to spot.
 - **`command not found: atlas`.** `~/.cargo/bin` isn't on your `PATH`. Add it (rustup's installer normally does), or run the binary by its full path.
 - **A symbol is wrong or missing.** That's usually a tree-sitter extraction bug — please [open an issue](https://github.com/fkenmar/atlas/issues/new?template=extraction_bug.md) with a minimal snippet that reproduces it.
