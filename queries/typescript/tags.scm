@@ -1,4 +1,4 @@
-; repomap extraction query — TypeScript/JavaScript (tree-sitter-typescript)
+; atlas extraction query — TypeScript/JavaScript (tree-sitter-typescript)
 ;
 ; Capture-name contract, consumed by src/parse.rs:
 ;   @definition.<kind>  — whole declaration node; its span becomes the signature

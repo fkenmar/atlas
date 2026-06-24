@@ -1,4 +1,4 @@
-# repomap — Product Requirements Document
+# atlas — Product Requirements Document
 
 A repo-to-context compiler: compress any codebase into a token-budgeted structural map for LLM coding agents.
 
@@ -13,9 +13,9 @@ A repo-to-context compiler: compress any codebase into a token-budgeted structur
 
 ## 1. Summary
 
-repomap is a standalone CLI tool that parses an entire codebase and emits a compressed structural "map" of it: every function signature, type definition, exported symbol, and import relationship — with zero function bodies. A 50,000-line repository compiles down to a ~2,000-token summary that an LLM coding agent (Claude Code, Cursor, Codex CLI, or a raw API call) can hold entirely in context.
+atlas is a standalone CLI tool that parses an entire codebase and emits a compressed structural "map" of it: every function signature, type definition, exported symbol, and import relationship — with zero function bodies. A 50,000-line repository compiles down to a ~2,000-token summary that an LLM coding agent (Claude Code, Cursor, Codex CLI, or a raw API call) can hold entirely in context.
 
-The closest existing implementation is Aider's repo-map, which is widely cited as one of the main reasons Aider performs well on large codebases — but it is embedded inside Aider's Python application, not consumable as a standalone artifact, library, or shell pipeline. repomap extracts that idea into a fast, deterministic, single-binary tool written in Rust, designed to be composed: piped into prompts, dropped into CLAUDE.md, exposed as an MCP server, or run in CI to keep a committed map fresh.
+The closest existing implementation is Aider's repo-map, which is widely cited as one of the main reasons Aider performs well on large codebases — but it is embedded inside Aider's Python application, not consumable as a standalone artifact, library, or shell pipeline. atlas extracts that idea into a fast, deterministic, single-binary tool written in Rust, designed to be composed: piped into prompts, dropped into CLAUDE.md, exposed as an MCP server, or run in CI to keep a committed map fresh.
 
 ## 2. Problem
 
@@ -49,7 +49,7 @@ Agentic coding tools went mainstream in 2025–2026, and context-engineering is 
 
 ### 3.2 Non-Goals (v1)
 
-- Semantic search or embeddings — repomap is purely structural.
+- Semantic search or embeddings — atlas is purely structural.
 - Full code intelligence (go-to-definition, rename) — that's an LSP's job.
 - IDE plugins or GUI — CLI and MCP only.
 - Editing or generating code — read-only tool.
@@ -59,9 +59,9 @@ Agentic coding tools went mainstream in 2025–2026, and context-engineering is 
 
 | Persona | Use case | Success looks like |
 |---|---|---|
-| Claude Code power user (primary; includes the author) | Runs `repomap` in a session hook or pre-commit to keep a fresh map in CLAUDE.md / context | Agent stops re-exploring; fewer turns to first correct edit; lower token spend per task |
-| Agent-framework developer | Calls repomap as a subprocess or MCP tool to seed agent context before planning | One dependency replaces a homegrown ctags/grep pipeline |
-| OSS maintainer | Commits `REPOMAP.md` to the repo so any contributor's agent onboards instantly | Map regenerated in CI; PR diffs show API surface changes at a glance |
+| Claude Code power user (primary; includes the author) | Runs `atlas` in a session hook or pre-commit to keep a fresh map in CLAUDE.md / context | Agent stops re-exploring; fewer turns to first correct edit; lower token spend per task |
+| Agent-framework developer | Calls atlas as a subprocess or MCP tool to seed agent context before planning | One dependency replaces a homegrown ctags/grep pipeline |
+| OSS maintainer | Commits `atlas-map.md` to the repo so any contributor's agent onboards instantly | Map regenerated in CI; PR diffs show API surface changes at a glance |
 | Tech lead / reviewer | Uses the map diff as a lightweight API-surface change report | Breaking-change visibility without reading full diffs |
 
 ## 5. Product Description
@@ -76,7 +76,7 @@ discover -> parse -> link -> rank -> budget -> render
            file)    refs)     graph)
 ```
 
-- **Discover:** Walk the tree respecting .gitignore, .repomapignore, and binary/vendored-path heuristics (node_modules, target/, .venv, dist/ excluded by default).
+- **Discover:** Walk the tree respecting .gitignore, .atlasignore, and binary/vendored-path heuristics (node_modules, target/, .venv, dist/ excluded by default).
 - **Parse:** Per-file tree-sitter parse extracting declarations: functions/methods (name, parameters, return type, visibility, async/generic markers), types (records, variants, classes, interfaces, enums, type aliases), constants, and module-level docstrings (first line only).
 - **Link:** Build a directed graph: files and symbols as nodes; import statements and cross-file references as edges. Resolution is best-effort and syntactic (module paths, relative imports) — no type checker required.
 - **Rank:** Personalized PageRank over the graph (the approach Aider validated). Symbols referenced from many places rank high; leaf utilities rank low. Optional personalization vector boosts files passed via `--focus` (e.g., files currently being edited), so the map adapts to the task.
@@ -86,20 +86,20 @@ discover -> parse -> link -> rank -> budget -> render
 ### 5.2 CLI surface
 
 ```
-$ repomap .                          # map cwd, 2048-token budget, markdown to stdout
-$ repomap . --budget 4096 --format json
-$ repomap . --focus src/auth/ --focus src/api/routes.ts
-$ repomap . --lang ts,py             # restrict languages
-$ repomap . --no-private             # public API surface only
-$ repomap . --watch                  # daemon: re-emit on file change
-$ repomap serve --mcp                # expose as MCP server (map/symbol/anchor tools)
-$ repomap diff HEAD~5                # API-surface diff between git revisions
+$ atlas .                          # map cwd, 2048-token budget, markdown to stdout
+$ atlas . --budget 4096 --format json
+$ atlas . --focus src/auth/ --focus src/api/routes.ts
+$ atlas . --lang ts,py             # restrict languages
+$ atlas . --no-private             # public API surface only
+$ atlas . --watch                  # daemon: re-emit on file change
+$ atlas serve --mcp                # expose as MCP server (map/symbol/anchor tools)
+$ atlas diff HEAD~5                # API-surface diff between git revisions
 ```
 
 ### 5.3 Example output (markdown, excerpt)
 
 ```
-# repomap: acme-api (50,312 LOC, 214 files) | budget 2048 | rendered 1,991 tok
+# atlas: acme-api (50,312 LOC, 214 files) | budget 2048 | rendered 1,991 tok
 
 ## src/auth/service.py (ranked #1 — imported by 31 files)
 class AuthService:
@@ -129,10 +129,10 @@ class Session(Base)   # fields: id, user_id, expires_at
 | FR-4 | PageRank ranking over the import/reference graph with --focus personalization. | P0 |
 | FR-5 | Markdown, JSON, and XML renderers with a versioned, documented JSON schema. | P0 (md/json), P1 (xml) |
 | FR-6 | Incremental cache keyed on (file path, content hash, grammar version); only changed files re-parse. | P0 |
-| FR-7 | Ignore handling: .gitignore, .repomapignore, built-in vendored-path defaults. | P0 |
+| FR-7 | Ignore handling: .gitignore, .atlasignore, built-in vendored-path defaults. | P0 |
 | FR-8 | MCP server mode exposing get_map(budget, focus), get_symbol(name), get_symbol_index(budget), and expand_symbol(anchor) tools. | P1 |
 | FR-9 | --watch daemon mode for editor/agent integrations. | P1 |
-| FR-10 | repomap diff <rev>: API-surface diff between two git revisions. | P2 |
+| FR-10 | atlas diff <rev>: API-surface diff between two git revisions. | P2 |
 | FR-11 | Exact BPE token counting (tiktoken-rs) for budget enforcement; tokenizer selectable via flag. | P0 |
 | FR-12 | Graceful handling of unparseable files: skip, count, report in a footer line — never crash. | P0 |
 
@@ -161,10 +161,10 @@ Runtime performance is roughly language-neutral here — tree-sitter (a C librar
 | CLI | clap (derive API) | Subcommands: map (default), serve, diff. |
 | Graph + ranking | In-house adjacency list + power-iteration PageRank (~100 lines) | No dependency needed; damping 0.85, 20 iterations, convergence check. |
 | Tokenizer | tiktoken-rs (exact BPE), pluggable trait for other tokenizers | Budget enforcement uses exact counts. |
-| Cache | Content-hash keyed parse results in .repomap/cache, serialized with bincode | Invalidated by grammar crate version bump; safe to delete anytime. |
+| Cache | Content-hash keyed parse results in .atlas/cache, serialized with bincode | Invalidated by grammar crate version bump; safe to delete anytime. |
 | Concurrency | rayon parallel iterator over files | Parsing is embarrassingly parallel; linking/ranking is the serial tail. |
 | Watch mode | notify crate (cross-platform FS events) | Feeds the same in-memory index the MCP server reads. |
-| Git integration | git2 crate (libgit2 bindings) | Powers repomap diff <rev> without shelling out. |
+| Git integration | git2 crate (libgit2 bindings) | Powers atlas diff <rev> without shelling out. |
 | MCP server | stdio JSON-RPC per MCP spec (serde_json) | Reuses the watch daemon's in-memory index. |
 | Distribution | cargo-dist: macOS arm64/x64, Linux x64/arm64 (musl static) | Generates Homebrew formula and curl-pipe installer; also published to crates.io. |
 
@@ -213,7 +213,7 @@ The agent task benchmark is the metric that matters: it directly tests the produ
 | M0 — Foundation | Cargo workspace; tree-sitter + Python grammar wired; naive full map end-to-end; agent benchmark harness built and baseline (no-map) numbers recorded | 1 wk | Pipeline runs on one real repo; baseline benchmark recorded. (The OCaml plan's binding-risk spike is unnecessary in Rust — this week goes to the benchmark instead.) |
 | M1 — Core (v0.1 alpha) | TS/JS + Rust grammars; import linking; PageRank; tiktoken budgeting; md + json renderers; cache; gitignore | 2 wks | FR-1, 3–7, 11–12 done; NFR-1 met; benchmark shows measurable win |
 | M2 — Integration (v0.2) | MCP server; --watch; --focus personalization; cargo-dist packaging (Homebrew, crates.io, installer); docs + README with benchmark results | 2 wks | Installable by a stranger in <2 min; MCP works in Claude Code |
-| M3 — Breadth (v0.3) | Go, Java, C/C++, OCaml grammars; XML renderer; repomap diff | 3 wks | Tier 2 languages pass the signature-accuracy audit |
+| M3 — Breadth (v0.3) | Go, Java, C/C++, OCaml grammars; XML renderer; atlas diff | 3 wks | Tier 2 languages pass the signature-accuracy audit |
 
 ## 10. Risks and Mitigations
 
@@ -229,10 +229,10 @@ The agent task benchmark is the metric that matters: it directly tests the produ
 ## 11. Open Questions
 
 - Should the default budget be 2,048 tokens, or adaptive (e.g., 2% of repo source tokens, capped)?
-- Map placement convention: committed REPOMAP.md vs. generated-on-demand vs. injected via MCP only? (Affects docs and the CI story.)
+- Map placement convention: committed atlas-map.md vs. generated-on-demand vs. injected via MCP only? (Affects docs and the CI story.)
 - Are docstring first-lines worth their token cost at default budget, or opt-in via --docs?
-- Name check: "repomap" collides with Aider's feature name — asset or liability for discoverability? Alternatives: ctxmap, codemap, mapgen.
-- Should repomap diff gate CI (fail on breaking API change) in v1, or remain informational?
+- Name check: "atlas" collides with Aider's feature name — asset or liability for discoverability? Alternatives: ctxmap, codemap, mapgen.
+- Should atlas diff gate CI (fail on breaking API change) in v1, or remain informational?
 
 ## 12. Appendix: Competitive Snapshot
 

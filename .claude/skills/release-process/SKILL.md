@@ -3,7 +3,7 @@ name: release-process
 description: Use for releases and versioning — version bumps, tagging, CHANGELOG entries, cargo-dist builds, Homebrew or crates.io publishing, or any "ship v0.x" request.
 ---
 
-# Releasing repomap
+# Releasing atlas
 
 ## Semver policy (pre-1.0)
 

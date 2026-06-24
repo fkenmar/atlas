@@ -3,13 +3,13 @@ name: benchmark-protocol
 description: Use for benchmark work — running or interpreting ./benchmark/run.sh, recording or questioning baselines, baseline.json, adding benchmark tasks, or any "is this ranking/budgeting change actually better?" question.
 ---
 
-# The repomap benchmark protocol
+# The atlas benchmark protocol
 
 The agent-task benchmark is the arbiter of every ranking/budgeting change (PRD §8): 10 Claude Code tasks on a pinned ~50k-LOC repo, measuring **exploration tokens** and **turns-to-completion** with the map in context vs. without. v0.1 target: ≥25% reduction in exploration tokens. If a change doesn't move these numbers, it doesn't matter how clever it is.
 
 ## How run.sh works
 
-`./benchmark/run.sh [tasks…]` iterates `benchmark/tasks/*.yaml` (or just the ones you pass), runs each task's two arms — **without-map** (plain session) and **with-map** (repomap output injected at session start) — and writes one result JSON per invocation to `benchmark/results/run-<stamp>.local.json` (gitignored). Real agent-session execution is the marked M0 integration point in the script; until it lands, run.sh emits the result schema with nulls so reporting tooling can be built against real shapes.
+`./benchmark/run.sh [tasks…]` iterates `benchmark/tasks/*.yaml` (or just the ones you pass), runs each task's two arms — **without-map** (plain session) and **with-map** (atlas output injected at session start) — and writes one result JSON per invocation to `benchmark/results/run-<stamp>.local.json` (gitignored). Real agent-session execution is the marked M0 integration point in the script; until it lands, run.sh emits the result schema with nulls so reporting tooling can be built against real shapes.
 
 ## Task format (one YAML per task)
 

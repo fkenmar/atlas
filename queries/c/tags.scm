@@ -1,4 +1,4 @@
-; repomap extraction query — C (tree-sitter-c)
+; atlas extraction query — C (tree-sitter-c)
 ;
 ; Capture-name contract, consumed by src/parse.rs:
 ;   @definition.<kind>  — whole declaration node; its span becomes the signature
