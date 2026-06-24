@@ -1,6 +1,6 @@
 # The self-improvement loop
 
-repomap develops itself in a measured loop instead of ad-hoc prompting: each
+atlas develops itself in a measured loop instead of ad-hoc prompting: each
 iteration picks one item off the board, implements it, proves the tree is
 healthy, **measures whether it actually helped**, and either keeps it (with
 the stats recorded) or reverts it (with the failed approach logged). The

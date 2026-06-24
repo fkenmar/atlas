@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# repomap agent-task benchmark runner (M0: real headless execution).
+# atlas agent-task benchmark runner (M0: real headless execution).
 #
 # Protocol: benchmark/README.md. For each task YAML, runs N headless Claude
 # Code sessions per arm in a fresh checkout of the task's pinned repo,
@@ -9,7 +9,7 @@
 #
 # Arms:
 #   without_map  plain session (the baseline arm)
-#   with_map     repomap output injected as appended system prompt — OFF by
+#   with_map     atlas output injected as appended system prompt — OFF by
 #                default until budgeting lands (M1); the naive full map is
 #                too large to inject fairly. Enable via BENCH_ARMS.
 #
@@ -81,7 +81,7 @@ median_of() { # median_of <newline-separated numbers on stdin>
 
 stamp="$(date +%Y%m%d-%H%M%S)"
 out="results/run-${stamp}.local.json"
-echo "repomap benchmark — ${#tasks[@]} task(s), arms: ${BENCH_ARMS}, ${BENCH_RUNS} run(s)/arm, model ${BENCH_MODEL}"
+echo "atlas benchmark — ${#tasks[@]} task(s), arms: ${BENCH_ARMS}, ${BENCH_RUNS} run(s)/arm, model ${BENCH_MODEL}"
 
 task_objects=()
 for t in "${tasks[@]}"; do

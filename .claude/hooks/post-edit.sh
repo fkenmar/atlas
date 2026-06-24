@@ -30,7 +30,7 @@ case "$file" in
     fi
     ;;
   *queries/*.scm)
-    test_out="$(cargo test --quiet -p repomap query_ 2>&1)"
+    test_out="$(cargo test --quiet -p atlas query_ 2>&1)"
     test_status=$?
     if [ "$test_status" -ne 0 ]; then
       printf '%s\n' "$test_out" | tail -30 >&2

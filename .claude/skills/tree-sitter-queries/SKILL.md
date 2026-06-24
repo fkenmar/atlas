@@ -3,7 +3,7 @@ name: tree-sitter-queries
 description: Use when working on tree-sitter extraction — any task touching queries/**/*.scm or tags.scm files, adding language support, fixing missing or wrong symbols in the map, writing snapshot tests for queries, or looking up grammar node names.
 ---
 
-# Writing tree-sitter extraction queries for repomap
+# Writing tree-sitter extraction queries for atlas
 
 ## Anatomy of a tags.scm
 

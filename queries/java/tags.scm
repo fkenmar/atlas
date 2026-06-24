@@ -1,4 +1,4 @@
-; repomap extraction query — Java (tree-sitter-java)
+; atlas extraction query — Java (tree-sitter-java)
 ;
 ; Capture-name contract, consumed by src/parse.rs:
 ;   @definition.<kind>  — whole declaration node; its span becomes the signature

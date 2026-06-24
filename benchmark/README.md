@@ -38,7 +38,7 @@ slightly run to run — but comprehension is constrained and stable (unlike the
 10 Claude Code tasks (growing from the 2 committed examples) on a pinned ~50k-LOC target repo. Each task runs in two arms:
 
 - **without-map** (baseline): plain Claude Code session.
-- **with-map**: `repomap` output for the target repo injected into context at session start.
+- **with-map**: `atlas` output for the target repo injected into context at session start.
 
 (A preliminary with-map probe with the naive unbudgeted map was run 2026-06-12 — turns −41–43%, tokens up from cache re-reads of the oversized map; see STATUS.md. The official comparison starts when M1 budgeting makes the arm fair.)
 
@@ -108,17 +108,17 @@ It reproduces the recorded numbers exactly — **12/20 @ 2048, 17/20 @ 3072** (m
 
 ## Competitive arms — the next protocol step (post-M1)
 
-Beating our own no-map baseline is necessary but not sufficient: repomap has to beat the **existing alternatives** (PRD §12) on the same task suite, same protocol, same model. Once the M1 budgeted map exists, each competitor becomes one more arm per task — the injection mechanism is identical (context prepended at session start), only the artifact changes:
+Beating our own no-map baseline is necessary but not sufficient: atlas has to beat the **existing alternatives** (PRD §12) on the same task suite, same protocol, same model. Once the M1 budgeted map exists, each competitor becomes one more arm per task — the injection mechanism is identical (context prepended at session start), only the artifact changes:
 
 | Arm | Artifact injected | What it tests |
 |---|---|---|
-| `repomap` | M1 budgeted map (default 2,048 tok) | our product |
+| `atlas` | M1 budgeted map (default 2,048 tok) | our product |
 | `aider_map` | Aider's repo-map output for the same repo (extracted via Aider, same token ballpark) | the proven incumbent — **the bar that matters most** |
 | `ctags` | universal-ctags symbol dump, trimmed to the same token budget | flat symbol list, no graph/ranking |
 | `file_tree` | bare directory listing, same budget | cheap control: is structure alone enough? |
 | `without_map` | nothing | the recorded baseline |
 
-**The bar:** at equal injected-context budget, repomap must beat every competitor arm on median exploration tokens AND turns, and `aider_map` specifically must not beat us on either — if it does, that's a ranking-quality gap to close before v0.1 ships (PRD §10 lists this exact risk). Results get the same 3-run/median/variance hygiene as everything else, and the comparison table goes in the README the day we have it.
+**The bar:** at equal injected-context budget, atlas must beat every competitor arm on median exploration tokens AND turns, and `aider_map` specifically must not beat us on either — if it does, that's a ranking-quality gap to close before v0.1 ships (PRD §10 lists this exact risk). Results get the same 3-run/median/variance hygiene as everything else, and the comparison table goes in the README the day we have it.
 
 ## Adding a task
 

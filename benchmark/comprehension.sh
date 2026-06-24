@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# repomap comprehension benchmark: does a map in context MAINTAIN (or
+# atlas comprehension benchmark: does a map in context MAINTAIN (or
 # improve) the agent's understanding of the repo, or does it make the agent
 # faster but wronger?
 #

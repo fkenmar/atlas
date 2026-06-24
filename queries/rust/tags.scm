@@ -1,4 +1,4 @@
-; repomap extraction query — Rust (tree-sitter-rust)
+; atlas extraction query — Rust (tree-sitter-rust)
 ;
 ; Capture-name contract, consumed by src/parse.rs:
 ;   @definition.<kind>  — whole declaration node; its span becomes the signature
