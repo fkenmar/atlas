@@ -9,7 +9,7 @@
 //! the score vector stays a proper distribution summing to 1. All arithmetic
 //! runs in node-index order — deterministic across runs and platforms (NFR-4).
 
-use crate::link::Graph;
+use crate::link::{Graph, NodeKind};
 
 /// Damping factor: probability of following an edge vs. teleporting (PRD §7.2).
 const DAMPING: f64 = 0.85;
@@ -17,6 +17,13 @@ const DAMPING: f64 = 0.85;
 const MAX_ITERS: usize = 20;
 /// Stop early once the total (L1) change across all nodes drops below this.
 const EPSILON: f64 = 1e-9;
+/// Teleport weight for test / test-support files relative to production files
+/// (1.0). Test files are graph leaves whose rank flows into whatever they
+/// import; at full weight a fixture imported across the whole test suite (e.g.
+/// a `pytester`-style helper) outranks the production surface and dominates the
+/// budget. A reduced prior keeps the map centred on production code. Tuned
+/// against the comprehension benchmark.
+const TEST_WEIGHT: f64 = 0.25;
 
 /// PageRank scores, indexed parallel to `Graph::nodes`. Scores sum to ~1.
 pub struct Ranking(pub Vec<f64>);
@@ -37,8 +44,10 @@ pub fn rank(graph: &Graph, focus: &[usize]) -> Ranking {
         return Ranking(Vec::new());
     }
 
-    // Personalization / teleport vector p (sums to 1).
-    let p = personalization(n, focus);
+    // Personalization / teleport vector p (sums to 1). Test/support files carry
+    // a reduced prior so production code ranks above suite-wide fixtures.
+    let weights = node_weights(graph);
+    let p = personalization(&weights, focus);
 
     // Power iteration.
     let mut rank = p.clone();
@@ -69,16 +78,26 @@ pub fn rank(graph: &Graph, focus: &[usize]) -> Ranking {
     Ranking(rank)
 }
 
-/// Build the teleport distribution: uniform over all nodes, or — when one or
-/// more in-range focus indices are given — uniform over just those.
-fn personalization(n: usize, focus: &[usize]) -> Vec<f64> {
+/// Build the teleport distribution. With one or more in-range `--focus` indices
+/// it is uniform over just those (a task seed). Otherwise it is proportional to
+/// each node's `weight` — uniform for production code, reduced for test/support
+/// files so they don't dominate the ranking.
+fn personalization(weights: &[f64], focus: &[usize]) -> Vec<f64> {
+    let n = weights.len();
     let mut seeds: Vec<usize> = focus.iter().copied().filter(|&i| i < n).collect();
     seeds.sort_unstable();
     seeds.dedup();
 
     let mut p = vec![0.0f64; n];
     if seeds.is_empty() {
-        p.fill(1.0 / n as f64);
+        let total: f64 = weights.iter().sum();
+        if total > 0.0 {
+            for (i, &w) in weights.iter().enumerate() {
+                p[i] = w / total;
+            }
+        } else {
+            p.fill(1.0 / n as f64);
+        }
     } else {
         let share = 1.0 / seeds.len() as f64;
         for i in seeds {
@@ -86,6 +105,51 @@ fn personalization(n: usize, focus: &[usize]) -> Vec<f64> {
         }
     }
     p
+}
+
+/// Per-node teleport weight: production files (and their symbols) get 1.0, test
+/// / test-support files get [`TEST_WEIGHT`]. A Symbol node inherits its defining
+/// file's weight — the File node index equals the file index per the link-graph
+/// layout invariant, so `graph.nodes[node.file]` is that File node.
+fn node_weights(graph: &Graph) -> Vec<f64> {
+    graph
+        .nodes
+        .iter()
+        .map(|node| {
+            let path = match node.kind {
+                NodeKind::File => node.label.as_str(),
+                NodeKind::Symbol => graph.nodes[node.file].label.as_str(),
+            };
+            if is_test_path(path) {
+                TEST_WEIGHT
+            } else {
+                1.0
+            }
+        })
+        .collect()
+}
+
+/// Heuristic: does this repo-relative path look like test or test-support code?
+/// Matches a conventional test directory segment or a test-style filename across
+/// the supported languages. Deliberately conservative — it must not down-weight
+/// production code (a `pytester.py` helper is demoted via its test importers,
+/// not by matching here).
+fn is_test_path(rel: &str) -> bool {
+    let dir_is_test = rel.split(['/', '\\']).any(|seg| {
+        matches!(
+            seg,
+            "test" | "tests" | "testing" | "__tests__" | "spec" | "specs"
+        )
+    });
+    let file = rel.rsplit(['/', '\\']).next().unwrap_or(rel);
+    let name_is_test = file == "conftest.py"
+        || file.starts_with("test_")
+        || file.contains(".test.")
+        || file.contains(".spec.")
+        || file
+            .rsplit_once('.')
+            .is_some_and(|(stem, _)| stem.ends_with("_test"));
+    dir_is_test || name_is_test
 }
 
 #[cfg(test)]
@@ -225,5 +289,50 @@ mod tests {
         let a = rank(&g, &[]);
         let b = rank(&g, &[]);
         assert_eq!(a.0, b.0);
+    }
+
+    #[test]
+    fn test_file_imports_contribute_less_than_production() {
+        // lib_a is imported by a production file, lib_b by a test file; the
+        // graphs are otherwise identical, so lib_a must outrank lib_b.
+        let g = Graph {
+            nodes: vec![
+                file_node("src/prod.py", 0),
+                file_node("testing/test_x.py", 1),
+                file_node("src/lib_a.py", 2),
+                file_node("src/lib_b.py", 3),
+            ],
+            // prod -> lib_a ; test_x -> lib_b
+            edges: vec![vec![2], vec![3], vec![], vec![]],
+        };
+        let r = rank(&g, &[]);
+        assert!(
+            r.score(2) > r.score(3),
+            "production-imported lib_a ({}) should outrank test-imported lib_b ({})",
+            r.score(2),
+            r.score(3)
+        );
+    }
+
+    #[test]
+    fn is_test_path_matches_conventions_not_production() {
+        for p in [
+            "testing/test_capture.py",
+            "tests/foo.py",
+            "src/conftest.py",
+            "pkg/foo_test.go",
+            "web/Button.spec.ts",
+            "web/Button.test.tsx",
+            "src/__tests__/x.js",
+        ] {
+            assert!(is_test_path(p), "{p} should be a test path");
+        }
+        for p in [
+            "src/_pytest/pytester.py",
+            "src/_pytest/capture.py",
+            "src/latest/contest.py",
+        ] {
+            assert!(!is_test_path(p), "{p} should NOT be a test path");
+        }
     }
 }
